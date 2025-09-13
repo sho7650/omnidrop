@@ -236,7 +236,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-[Specify your license here]
+MIT License - see the [LICENSE](LICENSE) file for details
 
 ## Acknowledgments
 
