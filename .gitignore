@@ -68,6 +68,9 @@ profile.cov
 go.work
 go.work.sum
 
+# Built binaries
+omnidrop-server
+
 # env file
 .env
 
