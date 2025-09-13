@@ -1,6 +1,6 @@
 # OmniDrop
 
-A lightweight REST API server that bridges external applications with OmniFocus on macOS. Create OmniFocus tasks programmatically through a simple HTTP API.
+A lightweight REST API server that bridges external applications with OmniFocus on macOS. Create OmniFocus tasks programmatically through a simple HTTP API with built-in service management and easy installation.
 
 ## Features
 
@@ -10,6 +10,27 @@ A lightweight REST API server that bridges external applications with OmniFocus 
 - ⏰ Automatic due date setting (end of current day)
 - 🍎 Native OmniFocus integration via AppleScript
 - 🔧 Environment-based configuration with `.env` support
+- 🛠️ Comprehensive build system with Makefile
+- 🔄 macOS LaunchAgent service management
+- 📋 Automatic installation and service setup
+
+## Quick Start
+
+Get up and running in 3 commands:
+
+```bash
+# 1. Clone and setup
+git clone https://github.com/yourusername/omnidrop.git
+cd omnidrop
+
+# 2. Configure (edit TOKEN)
+cp .env.example .env
+
+# 3. Install and start service
+make install && make start
+```
+
+Your OmniDrop server is now running at `http://localhost:8787`!
 
 ## Prerequisites
 
@@ -20,26 +41,149 @@ A lightweight REST API server that bridges external applications with OmniFocus 
 
 ## Installation
 
-1. Clone the repository:
+### Production Installation (Recommended)
+
+Full installation with automatic service management:
+
 ```bash
+# Clone repository
 git clone https://github.com/yourusername/omnidrop.git
 cd omnidrop
-```
 
-2. Install dependencies:
-```bash
-go get github.com/joho/godotenv
-```
-
-3. Build the server:
-```bash
-go build -o omnidrop-server .
-```
-
-4. Configure environment variables:
-```bash
+# Configure environment
 cp .env.example .env
-# Edit .env and set your secure token
+# Edit .env and set your secure TOKEN
+
+# Install everything (binary, service, AppleScript)
+make install
+
+# Start the service
+make start
+
+# Check status
+make status
+```
+
+This installs:
+- Binary: `~/bin/omnidrop-server`
+- AppleScript: `~/.local/share/omnidrop/omnidrop.applescript`
+- LaunchAgent: `~/Library/LaunchAgents/com.oshiire.omnidrop.plist`
+- Logs: `~/.local/log/omnidrop/`
+
+### Development Installation
+
+For development and testing:
+
+```bash
+# Clone repository
+git clone https://github.com/yourusername/omnidrop.git
+cd omnidrop
+
+# Install dependencies
+make deps
+
+# Configure environment
+cp .env.example .env
+# Edit .env and set your TOKEN
+
+# Run development server
+make dev
+```
+
+## Service Management
+
+Control the OmniDrop service with simple commands:
+
+```bash
+# Start service
+make start
+
+# Stop service
+make stop
+
+# Check service status
+make status
+
+# View logs (last 20 lines)
+make logs
+
+# Follow logs in real-time
+make logs-follow
+
+# Restart service
+make stop && make start
+```
+
+### Service Status
+
+Check if OmniDrop is running:
+```bash
+make status
+# Output: Service status with PID if running
+
+launchctl list | grep omnidrop
+# Output: Shows service details if loaded
+```
+
+## Development
+
+### Available Make Targets
+
+**Development:**
+```bash
+make dev     # Run with go run (requires TOKEN env var)
+make run     # Build and run binary
+make build   # Build binary only
+make test    # Run tests
+```
+
+**Installation:**
+```bash
+make install    # Install service and components
+make uninstall  # Remove everything
+make clean      # Clean build artifacts
+make deps       # Download dependencies
+```
+
+**Service Management:**
+```bash
+make start       # Start service
+make stop        # Stop service
+make status      # Check status
+make logs        # Show recent logs
+make logs-follow # Follow logs real-time
+```
+
+### Development Workflow
+
+```bash
+# Development cycle
+TOKEN="dev-token" make dev    # Direct development
+make test                     # Run tests
+make build                    # Build binary
+make run                      # Test built binary
+
+# When ready for production
+make install                  # Install service
+make start                    # Start service
+make logs                     # Check logs
+```
+
+### Running Tests
+
+```bash
+make test
+```
+
+### Building for Distribution
+
+```bash
+# Build for current platform
+make build
+
+# Manual builds for specific platforms
+GOOS=darwin GOARCH=amd64 go build -o build/bin/omnidrop-server-amd64 ./cmd/omnidrop-server
+GOOS=darwin GOARCH=arm64 go build -o build/bin/omnidrop-server-arm64 ./cmd/omnidrop-server
 ```
 
 ## Configuration
@@ -52,31 +196,16 @@ TOKEN=your-secret-token-here
 
 # Optional: Server port (default: 8787)
 PORT=8787
-
-# Optional: Path to AppleScript (default: ./omnidrop.applescript)
-SCRIPT=./omnidrop.applescript
 ```
 
-## Usage
+The server loads environment variables in this order:
+1. Project root `.env` file (recommended)
+2. Command directory `.env` file (fallback)
+3. System environment variables
 
-### Starting the Server
+## API Reference
 
-```bash
-# Using .env file (recommended)
-./omnidrop-server
-
-# Or with environment variables
-TOKEN="your-secret-token" ./omnidrop-server
-
-# Custom port
-PORT=8080 TOKEN="your-secret-token" ./omnidrop-server
-```
-
-The server will start on `http://localhost:8787` (or your configured port).
-
-### API Reference
-
-#### Create Task
+### Create Task
 
 **Endpoint:** `POST /tasks`
 
@@ -113,6 +242,12 @@ Error (4xx/5xx):
 }
 ```
 
+### Health Check
+
+**Endpoint:** `GET /health`
+
+Returns server status and version information.
+
 ### Example Requests
 
 #### Basic Task
@@ -145,18 +280,47 @@ http POST localhost:8787/tasks \
   project="Sales"
 ```
 
+## Project Structure
+
+```
+omnidrop/
+├── cmd/
+│   └── omnidrop-server/
+│       └── main.go             # HTTP server implementation
+├── init/
+│   └── launchd/
+│       └── com.oshiire.omnidrop.plist  # LaunchAgent template
+├── build/                      # Build artifacts (created by make)
+├── test/
+│   └── integration/            # Integration tests
+├── omnidrop.applescript        # OmniFocus integration script
+├── Makefile                    # Build and service management
+├── go.mod                      # Go module definition
+├── go.sum                      # Dependency checksums
+├── .env.example                # Environment configuration template
+├── .env                        # Local environment configuration (git-ignored)
+├── CLAUDE.md                   # AI assistant guidance
+└── README.md                   # This file
+```
+
 ## How It Works
 
-1. **HTTP Server** (`main.go`): 
+1. **HTTP Server** (`cmd/omnidrop-server/main.go`):
    - Receives POST requests with task data
-   - Validates authentication token
-   - Passes task data to AppleScript
+   - Validates Bearer token authentication
+   - Passes task data to AppleScript bridge
 
 2. **AppleScript Bridge** (`omnidrop.applescript`):
    - Parses JSON data using Python
    - Creates tasks in OmniFocus using AppleScript automation
    - Sets due date to 23:59:59 of current day
    - Handles project assignment and tag management
+
+3. **Service Management** (`Makefile` + `init/launchd/`):
+   - Installs binary and AppleScript to standard locations
+   - Creates LaunchAgent for automatic startup
+   - Provides service control commands
+   - Manages logs and configuration
 
 ## Important Notes
 
@@ -165,63 +329,73 @@ http POST localhost:8787/tasks \
 - **Due Dates**: All tasks are automatically set to due at end of current day (23:59:59)
 - **Inbox**: Tasks without a project are created in the OmniFocus inbox
 - **Security**: Always use HTTPS in production and keep your token secure
-
-## Error Handling
-
-The API provides detailed error messages for common issues:
-
-- `401 Unauthorized`: Invalid or missing authentication token
-- `400 Bad Request`: Invalid JSON or missing required fields
-- `405 Method Not Allowed`: Only POST requests are accepted
-- `500 Internal Server Error`: AppleScript execution failed (check OmniFocus is running)
-
-## Development
-
-### Running Tests
-```bash
-go test ./...
-```
-
-### Building for Distribution
-```bash
-# Build for current platform
-go build -o omnidrop-server .
-
-# Build for macOS (Intel)
-GOOS=darwin GOARCH=amd64 go build -o omnidrop-server-amd64 .
-
-# Build for macOS (Apple Silicon)
-GOOS=darwin GOARCH=arm64 go build -o omnidrop-server-arm64 .
-```
-
-### Project Structure
-```
-omnidrop/
-├── main.go                 # HTTP server implementation
-├── omnidrop.applescript    # OmniFocus integration script
-├── go.mod                  # Go module definition
-├── go.sum                  # Dependency checksums
-├── .env.example            # Environment configuration template
-├── .env                    # Local environment configuration (git-ignored)
-├── CLAUDE.md               # AI assistant guidance
-└── README.md               # This file
-```
+- **Service**: Automatically starts on login when installed via `make install`
 
 ## Troubleshooting
 
-### "AppleScript error" Response
+### Service Issues
+
+**Service won't start:**
+```bash
+make status          # Check if service is loaded
+make logs           # Check for error messages
+launchctl list | grep omnidrop  # Verify LaunchAgent status
+```
+
+**Service keeps crashing:**
+```bash
+make logs           # Check error logs
+make uninstall      # Clean removal
+make install        # Fresh installation
+```
+
+### API Issues
+
+**"AppleScript error" Response:**
 - Ensure OmniFocus is running
 - Check that project/tag names match exactly with OmniFocus
 - Verify Python 3 is installed: `python3 --version`
+- Check AppleScript permissions in System Preferences
 
-### "Unauthorized" Response
+**"Unauthorized" Response:**
 - Verify the token in your `.env` file matches the request
 - Ensure the Authorization header format is: `Bearer <token>`
+- Check if `.env` file is being loaded: look for log message on startup
 
-### Server Won't Start
+**"Server Won't Start":**
 - Check if port is already in use: `lsof -i :8787`
 - Verify `.env` file exists and TOKEN is set
 - Check file permissions on AppleScript file
+
+### Development Issues
+
+**Build failures:**
+```bash
+make clean          # Clean build artifacts
+make deps           # Reinstall dependencies
+go mod tidy         # Clean module dependencies
+```
+
+**Environment loading issues:**
+```bash
+make dev            # Use TOKEN= env var directly
+ls -la .env         # Verify .env file exists
+cat .env            # Check .env contents (remove TOKEN first!)
+```
+
+### Log Analysis
+
+```bash
+# View recent logs
+make logs
+
+# Follow logs in real-time
+make logs-follow
+
+# View specific log files
+tail -f ~/.local/log/omnidrop/stdout.log
+tail -f ~/.local/log/omnidrop/stderr.log
+```
 
 ## Security Considerations
 
@@ -229,6 +403,23 @@ omnidrop/
 - **HTTPS**: Use a reverse proxy (nginx/caddy) for HTTPS in production
 - **Token Rotation**: Regularly rotate your authentication tokens
 - **Network Access**: Bind to localhost only unless external access is required
+- **File Permissions**: Ensure proper permissions on `.env` and log files
+- **Service Security**: LaunchAgent runs as user, not root (safer)
+
+## Uninstalling
+
+Complete removal of OmniDrop:
+
+```bash
+make uninstall
+```
+
+This removes:
+- Binary from `~/bin/`
+- AppleScript from `~/.local/share/omnidrop/`
+- LaunchAgent from `~/Library/LaunchAgents/`
+- Log directory from `~/.local/log/omnidrop/`
+- Configuration from `~/.config/omnidrop/`
 
 ## Contributing
 
