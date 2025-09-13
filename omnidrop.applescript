@@ -1,29 +1,22 @@
 on run argv
-    -- Check arguments
-    if (count of argv) < 1 then
-        error "No JSON input provided"
+    -- Check arguments: expecting 4 arguments (title, note, project, tags)
+    if (count of argv) < 4 then
+        error "Expected 4 arguments: title, note, project, tags"
     end if
-    
-    set jsonString to item 1 of argv
-    
-    -- Parse JSON using shell command
-    set titleCmd to "echo " & quoted form of jsonString & " | /usr/bin/python3 -c \"import sys, json; data = json.load(sys.stdin); print(data.get('title', ''))\""
-    set noteCmd to "echo " & quoted form of jsonString & " | /usr/bin/python3 -c \"import sys, json; data = json.load(sys.stdin); print(data.get('note', ''))\""
-    set projectCmd to "echo " & quoted form of jsonString & " | /usr/bin/python3 -c \"import sys, json; data = json.load(sys.stdin); print(data.get('project', ''))\""
-    set tagsCmd to "echo " & quoted form of jsonString & " | /usr/bin/python3 -c \"import sys, json; data = json.load(sys.stdin); print(','.join(data.get('tags', [])))\""
-    
+
+    -- Get arguments directly (no parsing needed)
+    set taskTitle to item 1 of argv
+    set taskNote to item 2 of argv
+    set projectName to item 3 of argv
+    set tagsString to item 4 of argv
+
     try
-        set taskTitle to do shell script titleCmd
-        set taskNote to do shell script noteCmd
-        set projectName to do shell script projectCmd
-        set tagsString to do shell script tagsCmd
-        
         -- Validate title
         if taskTitle is "" then
             error "Title is required"
         end if
-        
-        -- Parse tags
+
+        -- Parse tags from comma-separated string
         set tagsList to {}
         if tagsString is not "" then
             set oldDelimiters to AppleScript's text item delimiters
@@ -87,7 +80,7 @@ on run argv
             end tell
         end tell
         
-        return "OK"
+        return "success"
         
     on error errMsg
         error errMsg
