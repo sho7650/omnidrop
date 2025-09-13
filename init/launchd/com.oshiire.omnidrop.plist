@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.oshiire.omnidrop</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>{{HOME}}/bin/omnidrop-server</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>TOKEN</key>
+        <string>{{TOKEN}}</string>
+        <key>PORT</key>
+        <string>8787</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+
+    <key>WorkingDirectory</key>
+    <string>{{HOME}}/.local/var/omnidrop</string>
+
+    <key>StandardOutPath</key>
+    <string>{{HOME}}/.local/log/omnidrop/stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>{{HOME}}/.local/log/omnidrop/stderr.log</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+        <key>Crashed</key>
+        <true/>
+    </dict>
+
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+
+    <key>ProcessType</key>
+    <string>Interactive</string>
+
+    <key>ExitTimeOut</key>
+    <integer>10</integer>
+
+    <key>LimitLoadToSessionType</key>
+    <array>
+        <string>Aqua</string>
+    </array>
+
+    <key>EnableGlobbing</key>
+    <true/>
+
+    <key>SoftResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>1024</integer>
+    </dict>
+</dict>
+</plist>
