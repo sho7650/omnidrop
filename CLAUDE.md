@@ -34,11 +34,17 @@ TOKEN="your-secret-token" ./omnidrop-server
 # Run with custom port
 PORT=8080 TOKEN="your-secret-token" ./omnidrop-server
 
-# Test the API endpoint
+# Test the API endpoint with simple project name
 curl -X POST http://localhost:8787/tasks \
   -H "Authorization: Bearer your-secret-token" \
   -H "Content-Type: application/json" \
   -d '{"title":"Test Task","note":"Description","project":"Work","tags":["urgent"]}'
+
+# Test with hierarchical project path
+curl -X POST http://localhost:8787/tasks \
+  -H "Authorization: Bearer your-secret-token" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Test Task","note":"Description","project":"Getting Things Done/3. Projects/お仕事/Enablement","tags":["urgent"]}'
 ```
 
 ## Configuration
@@ -56,7 +62,7 @@ Request body:
 {
   "title": "string (required)",
   "note": "string (optional)",
-  "project": "string (optional)",
+  "project": "string (optional) - supports hierarchical paths",
   "tags": ["string array (optional)"]
 }
 ```
@@ -76,5 +82,7 @@ Response:
 - Authentication is mandatory via `Authorization: Bearer <token>` header
 - AppleScript execution errors are captured and returned in API responses
 - Tasks are automatically assigned today's date at 23:59:59 as due date
+- **Hierarchical Project Support**: Projects can be referenced using paths (e.g., "Getting Things Done/3. Projects/お仕事/Enablement")
+- Simple project names are supported for backward compatibility
 - Project and tag names must exactly match existing items in OmniFocus
 - Tags that don't exist in OmniFocus are silently ignored
