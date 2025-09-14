@@ -70,6 +70,7 @@ go.work.sum
 
 # Built binaries
 build/
+/omnidrop-server
 
 # env file
 .env
