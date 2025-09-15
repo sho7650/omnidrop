@@ -3,17 +3,14 @@ package main
 import (
 	"context"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-
 	"omnidrop/internal/config"
 	"omnidrop/internal/handlers"
+	"omnidrop/internal/server"
 	"omnidrop/internal/services"
 )
 
@@ -44,36 +41,13 @@ func main() {
 		log.Printf("⚠️ AppleScript health check failed: %v", healthResult.Errors)
 	}
 
-	// Initialize handlers
+	// Initialize handlers and server
 	h := handlers.New(cfg, omniFocusService)
-
-	// Set up router with middleware
-	r := chi.NewRouter()
-
-	// Middleware
-	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(60 * time.Second))
-
-	// Routes
-	r.Post("/tasks", h.CreateTask)
-	r.Get("/health", h.Health)
-
-	// Start server with graceful shutdown
-	srv := &http.Server{
-		Addr:         ":" + cfg.Port,
-		Handler:      r,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
-	}
+	srv := server.NewServer(cfg, h)
 
 	// Start server in goroutine
 	go func() {
-		log.Printf("🚀 Server starting on port %s", cfg.Port)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := srv.Start(); err != nil {
 			log.Fatalf("Server failed to start: %v", err)
 		}
 	}()

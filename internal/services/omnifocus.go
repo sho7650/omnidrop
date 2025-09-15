@@ -14,6 +14,9 @@ type OmniFocusService struct {
 	cfg *config.Config
 }
 
+// Ensure OmniFocusService implements OmniFocusServiceInterface
+var _ OmniFocusServiceInterface = (*OmniFocusService)(nil)
+
 func NewOmniFocusService(cfg *config.Config) *OmniFocusService {
 	return &OmniFocusService{
 		cfg: cfg,
