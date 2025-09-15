@@ -16,6 +16,10 @@
         <string>{{TOKEN}}</string>
         <key>PORT</key>
         <string>8787</string>
+        <key>OMNIDROP_ENV</key>
+        <string>production</string>
+        <key>OMNIDROP_SCRIPT</key>
+        <string>{{HOME}}/.local/share/omnidrop/omnidrop.applescript</string>
         <key>PATH</key>
         <string>/usr/local/bin:/usr/bin:/bin</string>
     </dict>

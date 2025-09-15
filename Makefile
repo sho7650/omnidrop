@@ -160,12 +160,81 @@ deps:
 	$(GOMOD) tidy
 	$(GOMOD) download
 
+## test-isolated: Run isolated test suite with complete environment separation
+test-isolated: build
+	@echo "🧪 Running isolated test suite (port 8789)..."
+	@./scripts/run-isolated-test.sh
+
+## test-preflight: Run pre-flight validation checks
+test-preflight:
+	@echo "🔍 Running pre-flight validation..."
+	@./scripts/test-preflight.sh
+
+## dev-isolated: Run development server with explicit environment control (port 8788)
+dev-isolated: build
+	@echo "🚀 Starting isolated development server (port 8788)..."
+	@echo "Environment: development"
+	@echo "Port: 8788"
+	@echo "Script: ./omnidrop.applescript"
+	@echo ""
+	@echo "Press Ctrl+C to stop"
+	@OMNIDROP_ENV=development \
+	 OMNIDROP_SCRIPT=./omnidrop.applescript \
+	 PORT=8788 \
+	 TOKEN=$${TOKEN:-dev-token} \
+	 $(BIN_DIR)/$(BINARY_NAME)
+
+## staging: Run staging environment (production-like, port 8790)
+staging: build
+	@echo "🎭 Starting staging environment (port 8790)..."
+	@if [ -z "$$TOKEN" ]; then \
+		echo "Error: TOKEN environment variable required for staging"; \
+		echo "Usage: TOKEN=your-token make staging"; \
+		exit 1; \
+	fi
+	@echo "Environment: staging (test mode)"
+	@echo "Port: 8790"
+	@echo "Script: ./omnidrop.applescript"
+	@echo ""
+	@echo "Press Ctrl+C to stop"
+	@OMNIDROP_ENV=test \
+	 OMNIDROP_SCRIPT=./omnidrop.applescript \
+	 PORT=8790 \
+	 TOKEN=$$TOKEN \
+	 $(BIN_DIR)/$(BINARY_NAME)
+
+## production-run: Run production server (PROTECTED - port 8787)
+production-run:
+	@echo "🚨 PRODUCTION ENVIRONMENT - Port 8787"
+	@echo "======================================"
+	@echo ""
+	@echo "⚠️  This will start the production server"
+	@echo "⚠️  Port: 8787"
+	@echo "⚠️  Script: $(SCRIPT_DIR)/$(APPLESCRIPT_FILE)"
+	@echo ""
+	@read -p "Are you ABSOLUTELY SURE? Type 'yes' to continue: " confirm; \
+	if [ "$$confirm" != "yes" ]; then \
+		echo "Production run cancelled"; \
+		exit 1; \
+	fi
+	@if [ -z "$$TOKEN" ]; then \
+		echo "Error: TOKEN environment variable required for production"; \
+		exit 1; \
+	fi
+	@OMNIDROP_ENV=production \
+	 PORT=8787 \
+	 TOKEN=$$TOKEN \
+	 $(BIN_DIR)/$(BINARY_NAME)
+
 ## help: Show this help message
 help:
 	@echo "Available targets:"
 	@echo ""
 	@echo "Development:"
 	@grep -E '^## (build|run|dev|test):' $(MAKEFILE_LIST) | sed 's/^## /  /'
+	@echo ""
+	@echo "Testing & Environments:"
+	@grep -E '^## (test-isolated|test-preflight|dev-isolated|staging|production-run):' $(MAKEFILE_LIST) | sed 's/^## /  /'
 	@echo ""
 	@echo "Build & Install:"
 	@grep -E '^## (all|install|uninstall|clean|deps):' $(MAKEFILE_LIST) | sed 's/^## /  /'

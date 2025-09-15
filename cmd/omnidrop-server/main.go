@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -58,6 +59,12 @@ func main() {
 	}
 
 	log.Printf("🚀 OmniDrop Server %s (built at %s)", Version, BuildTime)
+	
+	// Validate environment before starting server
+	if err := validateEnvironment(port); err != nil {
+		log.Fatalf("Environment validation failed: %v", err)
+	}
+	
 	log.Printf("📡 Starting server on port %s", port)
 	log.Printf("🔐 Authentication token configured: %t", token != "")
 	log.Printf("📁 Working directory: %s", getWorkingDir())
@@ -123,34 +130,12 @@ func main() {
 }
 
 func createOmniFocusTask(task TaskRequest) TaskResponse {
-	// Get user's home directory
-	homeDir, err := os.UserHomeDir()
+	// Get AppleScript path with environment-based resolution
+	scriptPath, err := getAppleScriptPath()
 	if err != nil {
 		return TaskResponse{
 			Status: "error",
-			Reason: fmt.Sprintf("Could not get home directory: %v", err),
-		}
-	}
-
-	// Try different paths for the AppleScript
-	// Development location is checked first for testing
-	scriptPaths := []string{
-		"omnidrop.applescript", // Development location (priority)
-		fmt.Sprintf("%s/.local/share/omnidrop/omnidrop.applescript", homeDir), // Installed location
-	}
-
-	var scriptPath string
-	for _, path := range scriptPaths {
-		if _, err := os.Stat(path); err == nil {
-			scriptPath = path
-			break
-		}
-	}
-
-	if scriptPath == "" {
-		return TaskResponse{
-			Status: "error",
-			Reason: "AppleScript file not found",
+			Reason: fmt.Sprintf("AppleScript path error: %v", err),
 		}
 	}
 
@@ -193,6 +178,119 @@ func createOmniFocusTask(task TaskRequest) TaskResponse {
 		Created: false,
 		Reason:  fmt.Sprintf("AppleScript returned: %s", result),
 	}
+}
+
+// getAppleScriptPath returns the AppleScript path based on environment configuration
+func getAppleScriptPath() (string, error) {
+	// Priority 1: Explicit path via OMNIDROP_SCRIPT environment variable
+	if scriptPath := os.Getenv("OMNIDROP_SCRIPT"); scriptPath != "" {
+		log.Printf("🎯 Using explicit script path: %s", scriptPath)
+		return validateScriptPath(scriptPath)
+	}
+
+	// Priority 2: Environment-based selection
+	env := os.Getenv("OMNIDROP_ENV")
+	log.Printf("🌍 Environment: %s", env)
+
+	switch env {
+	case "production":
+		return getProductionScriptPath()
+	case "development":
+		return getDevelopmentScriptPath()
+	case "test":
+		return getTestScriptPath()
+	default:
+		// Fallback to legacy behavior with warning
+		log.Printf("⚠️ OMNIDROP_ENV not set, using legacy path resolution")
+		return getLegacyScriptPath()
+	}
+}
+
+// validateScriptPath ensures the script file exists and is accessible
+func validateScriptPath(path string) (string, error) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return "", fmt.Errorf("AppleScript file not found at: %s", path)
+	}
+	log.Printf("✅ AppleScript found: %s", path)
+	return path, nil
+}
+
+// getProductionScriptPath returns the production AppleScript path
+func getProductionScriptPath() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("could not get home directory: %v", err)
+	}
+	path := fmt.Sprintf("%s/.local/share/omnidrop/omnidrop.applescript", homeDir)
+	return validateScriptPath(path)
+}
+
+// getDevelopmentScriptPath returns the development AppleScript path
+func getDevelopmentScriptPath() (string, error) {
+	path := "omnidrop.applescript"
+	return validateScriptPath(path)
+}
+
+// getTestScriptPath returns the test AppleScript path
+func getTestScriptPath() (string, error) {
+	// For test environment, OMNIDROP_SCRIPT should be set
+	if scriptPath := os.Getenv("OMNIDROP_SCRIPT"); scriptPath != "" {
+		return validateScriptPath(scriptPath)
+	}
+	return "", fmt.Errorf("test environment requires OMNIDROP_SCRIPT to be set")
+}
+
+// getLegacyScriptPath provides fallback behavior
+func getLegacyScriptPath() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("could not get home directory: %v", err)
+	}
+
+	scriptPaths := []string{
+		"omnidrop.applescript",
+		fmt.Sprintf("%s/.local/share/omnidrop/omnidrop.applescript", homeDir),
+	}
+
+	for _, path := range scriptPaths {
+		if _, err := os.Stat(path); err == nil {
+			log.Printf("✅ AppleScript found (legacy): %s", path)
+			return path, nil
+		}
+	}
+
+	return "", fmt.Errorf("AppleScript file not found in any location")
+}
+
+// validateEnvironment performs safety checks before server startup
+func validateEnvironment(port string) error {
+	env := os.Getenv("OMNIDROP_ENV")
+	
+	// Protect production port
+	if port == "8787" && env != "production" {
+		return fmt.Errorf("❌ FATAL: Port 8787 is reserved for production environment only")
+	}
+	
+	// Validate test environment port range
+	if env == "test" {
+		portNum, err := strconv.Atoi(port)
+		if err != nil {
+			return fmt.Errorf("invalid port number: %s", port)
+		}
+		if portNum < 8788 || portNum > 8799 {
+			return fmt.Errorf("❌ FATAL: Test environment must use ports 8788-8799")
+		}
+	}
+	
+	// Protect production script in non-production environments
+	homeDir, _ := os.UserHomeDir()
+	prodScriptPath := fmt.Sprintf("%s/.local/share/omnidrop/omnidrop.applescript", homeDir)
+	if scriptPath := os.Getenv("OMNIDROP_SCRIPT"); scriptPath == prodScriptPath && env != "production" {
+		return fmt.Errorf("❌ FATAL: Cannot use production AppleScript in non-production environment")
+	}
+	
+	log.Printf("✅ Environment validation passed: %s on port %s", env, port)
+	return nil
 }
 
 func getWorkingDir() string {
@@ -257,12 +355,25 @@ func isSuccessResult(result string) bool {
 	// Define success patterns (case-insensitive)
 	successPatterns := []string{"true", "ok", "success", "created", "done"}
 
-	result = strings.ToLower(strings.TrimSpace(result))
+	result = strings.TrimSpace(result)
 	log.Printf("🔍 Checking result: '%s' against success patterns", result)
 
+	// Check if the last line matches any success pattern
+	lines := strings.Split(result, "\n")
+	lastLine := strings.ToLower(strings.TrimSpace(lines[len(lines)-1]))
+
 	for _, pattern := range successPatterns {
-		if strings.ToLower(pattern) == result {
-			log.Printf("✅ Match found: '%s' matches pattern '%s'", result, pattern)
+		if strings.ToLower(pattern) == lastLine {
+			log.Printf("✅ Match found: last line '%s' matches pattern '%s'", lastLine, pattern)
+			return true
+		}
+	}
+
+	// Fallback: check if any line contains a success pattern
+	resultLower := strings.ToLower(result)
+	for _, pattern := range successPatterns {
+		if strings.Contains(resultLower, strings.ToLower(pattern)) {
+			log.Printf("✅ Match found: result contains pattern '%s'", pattern)
 			return true
 		}
 	}

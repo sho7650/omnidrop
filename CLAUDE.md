@@ -15,12 +15,13 @@ The system consists of two main components:
    - Requires Bearer token authentication
    - Accepts POST requests to `/tasks` endpoint
    - Validates JSON payloads and invokes AppleScript
+   - **Environment-aware script resolution** for development/test isolation
 
-2. **AppleScript Bridge** (`omnidrop.applescript`): Handles OmniFocus integration:
-   - Parses JSON task data using Python
+2. **AppleScript Bridge** (`omnidrop.applescript`): Handles **OmniFocus 4** integration:
    - Creates tasks in OmniFocus with specified properties
    - Sets due dates to end of current day (23:59:59)
-   - Supports project assignment and tag management
+   - Supports hierarchical project assignment
+   - **Multi-strategy tag management** with automatic tag creation
 
 ## Development Commands
 
@@ -31,27 +32,52 @@ go build -o omnidrop-server .
 # Run the server (requires TOKEN environment variable)
 TOKEN="your-secret-token" ./omnidrop-server
 
-# Run with custom port
-PORT=8080 TOKEN="your-secret-token" ./omnidrop-server
+# IMPORTANT: For development/testing, NEVER use port 8787 (production port)
+# Use alternative ports for testing:
+PORT=8788 TOKEN="test-token" ./omnidrop-server
+PORT=8789 TOKEN="test-token" ./omnidrop-server
 
-# Test the API endpoint with simple project name
-curl -X POST http://localhost:8787/tasks \
-  -H "Authorization: Bearer your-secret-token" \
+# Test the API endpoint with simple project name (use test port!)
+curl -X POST http://localhost:8788/tasks \
+  -H "Authorization: Bearer test-token" \
   -H "Content-Type: application/json" \
   -d '{"title":"Test Task","note":"Description","project":"Work","tags":["urgent"]}'
 
-# Test with hierarchical project path
-curl -X POST http://localhost:8787/tasks \
-  -H "Authorization: Bearer your-secret-token" \
+# Test with hierarchical project path (use test port!)
+curl -X POST http://localhost:8788/tasks \
+  -H "Authorization: Bearer test-token" \
   -H "Content-Type: application/json" \
   -d '{"title":"Test Task","note":"Description","project":"Getting Things Done/3. Projects/お仕事/Enablement","tags":["urgent"]}'
 ```
 
-## Configuration
+## Environment Configuration
 
-The server requires environment variables set in `.env` file:
-- `TOKEN` (required): Bearer token for API authentication
-- `PORT` (optional): Server port, defaults to 8787
+### Environment Variables
+
+The server supports environment-based configuration for complete isolation:
+
+**Required Variables:**
+- `TOKEN`: Bearer token for API authentication
+
+**Environment Control:**
+- `OMNIDROP_ENV`: Environment mode (`production`, `development`, `test`)
+- `PORT`: Server port (8787=production, 8788-8799=test range)
+- `OMNIDROP_SCRIPT`: Explicit path to AppleScript file (overrides auto-detection)
+
+### Environment-Specific Script Resolution
+
+The server automatically selects the appropriate AppleScript file based on environment:
+
+```
+production:   ~/.local/share/omnidrop/omnidrop.applescript
+development:  ./omnidrop.applescript (current directory)
+test:         Uses OMNIDROP_SCRIPT environment variable
+legacy:       Fallback to installed or current directory
+```
+
+### Production Protection
+
+**CRITICAL**: Port 8787 is reserved for production only. Test environments MUST use ports 8788-8799 to prevent production interference.
 
 ## API Contract
 
@@ -76,13 +102,110 @@ Response:
 }
 ```
 
+## Test Execution Environment
+
+### Makefile Targets
+
+The project includes comprehensive testing infrastructure with complete environment isolation:
+
+```bash
+# Pre-flight validation (checks environment safety)
+make test-preflight
+
+# Isolated test suite with temporary environment
+make test-isolated
+
+# Development server with explicit environment control (port 8788)
+make dev-isolated
+
+# Staging environment (port 8790)
+make staging
+
+# Protected production environment (port 8787)
+make production-run
+```
+
+### Manual Testing Scripts
+
+**Pre-flight Validation:**
+```bash
+# Validates environment safety before testing
+./scripts/test-preflight.sh
+```
+
+**Isolated Test Execution:**
+```bash
+# Complete isolated test with cleanup
+./scripts/run-isolated-test.sh
+```
+
+### Test Environment Features
+
+- **Complete Isolation**: Creates temporary test directory with isolated AppleScript
+- **Production Protection**: Validates that port 8787 is never used for testing
+- **Automatic Cleanup**: Removes all temporary files and processes on completion
+- **Environment Validation**: Pre-flight checks prevent dangerous test execution
+- **Comprehensive Testing**: Tests all tag scenarios including auto-creation
+
 ## Key Implementation Details
 
+### **OmniFocus 4 Compatibility**
+
+- Compatible with OmniFocus 4 AppleScript API
 - The server only accepts POST requests and returns 405 for other methods
 - Authentication is mandatory via `Authorization: Bearer <token>` header
 - AppleScript execution errors are captured and returned in API responses
 - Tasks are automatically assigned today's date at 23:59:59 as due date
-- **Hierarchical Project Support**: Projects can be referenced using paths (e.g., "Getting Things Done/3. Projects/お仕事/Enablement")
+
+### **Hierarchical Project Support**
+
+Projects can be referenced using paths (e.g., "Getting Things Done/3. Projects/お仕事/Enablement")
 - Simple project names are supported for backward compatibility
-- Project and tag names must exactly match existing items in OmniFocus
-- Tags that don't exist in OmniFocus are silently ignored
+- Project names must exactly match existing items in OmniFocus
+
+### **Enhanced Tag Management**
+
+- **Multi-strategy tag assignment** with fallback mechanisms
+- **Automatic tag creation**: Non-existent tags are created in OmniFocus
+- **Individual tag processing**: Prevents type conversion errors (-2700)
+- **Graceful error handling**: Task creation continues even if some tags fail
+- **Strategy A**: Individual tag assignment with `add tagRef to tags of newTask`
+- **Strategy B**: Direct property assignment with `set tags to tags & {tagRef}`
+- **Strategy C**: Primary tag assignment as fallback
+
+## Environment Safety Guidelines
+
+### Development Workflow
+
+1. **Always start with pre-flight validation:**
+   ```bash
+   make test-preflight
+   ```
+
+2. **Use isolated environments for testing:**
+   ```bash
+   # For development work
+   make dev-isolated
+
+   # For comprehensive testing
+   make test-isolated
+   ```
+
+3. **Never use production port (8787) for development/testing**
+
+4. **Validate environment variables before starting:**
+   - `OMNIDROP_ENV` should be `development` or `test`
+   - `PORT` should be 8788-8799 range
+   - `OMNIDROP_SCRIPT` should point to development AppleScript
+
+### Troubleshooting
+
+**If tags are not being assigned:**
+1. Verify correct AppleScript file is being used: check `OMNIDROP_SCRIPT` path
+2. Check AppleScript logs for tag assignment strategy results
+3. Ensure OmniFocus 4 is running during task creation
+
+**If tests fail:**
+1. Run `make test-preflight` to check environment safety
+2. Verify no production processes are running on port 8787
+3. Check that OmniFocus is accessible for AppleScript execution
