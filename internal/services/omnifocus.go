@@ -10,22 +10,12 @@ import (
 	"omnidrop/internal/config"
 )
 
-type TaskCreateRequest struct {
-	Title   string
-	Note    string
-	Project string
-	Tags    []string
-}
-
-type TaskCreateResponse struct {
-	Status  string
-	Created bool
-	Reason  string
-}
-
 type OmniFocusService struct {
 	cfg *config.Config
 }
+
+// Ensure OmniFocusService implements OmniFocusServiceInterface
+var _ OmniFocusServiceInterface = (*OmniFocusService)(nil)
 
 func NewOmniFocusService(cfg *config.Config) *OmniFocusService {
 	return &OmniFocusService{
