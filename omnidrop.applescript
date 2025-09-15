@@ -185,29 +185,25 @@ on run argv
                     set note of newTask to taskNote
                 end if
                 
-                -- Set due date to today at 23:59:59
+                -- Set due date to today at 18:00:00
                 set todayDate to current date
-                set hours of todayDate to 23
-                set minutes of todayDate to 59
-                set seconds of todayDate to 59
+                set hours of todayDate to 18
+                set minutes of todayDate to 00
+                set seconds of todayDate to 00
                 set due date of newTask to todayDate
                 
-                -- Set tags if provided
+                -- Set tags using multi-strategy approach with fallbacks
                 if (count of tagsList) > 0 then
-                    set resolvedTags to {}
-                    repeat with tagName in tagsList
-                        set tagName to my trimWhitespace(tagName as text)
-                        if tagName is not "" then
-                            try
-                                set tagList to (every tag whose name is tagName)
-                                if (count of tagList) > 0 then
-                                    set end of resolvedTags to item 1 of tagList
-                                end if
-                            end try
-                        end if
-                    end repeat
-                    if (count of resolvedTags) > 0 then
-                        set tags of newTask to resolvedTags
+                    set tagResults to my assignTagsWithFallback(newTask, tagsList, it)
+                    set assignedTags to assigned of tagResults
+                    set failedTags to failed of tagResults
+                    
+                    -- Log summary results
+                    if (count of assignedTags) > 0 then
+                        log "Task created with " & (count of assignedTags) & " tags: " & my listToString(assignedTags)
+                    end if
+                    if (count of failedTags) > 0 then
+                        log "Warning: " & (count of failedTags) & " tags could not be assigned: " & my listToString(failedTags)
                     end if
                 end if
             end tell
@@ -219,3 +215,113 @@ on run argv
         error errMsg
     end try
 end run
+
+-- Helper function: Get or create tag with safe context handling
+on getOrCreateTagSafely(tagName, docRef)
+    tell application "OmniFocus"
+        tell docRef
+            try
+                set tagList to (every tag whose name is tagName)
+                if (count of tagList) > 0 then
+                    log "Found existing tag: " & tagName
+                    return item 1 of tagList
+                else
+                    set newTag to make new tag with properties {name:tagName}
+                    log "Created new tag: " & tagName
+                    return newTag
+                end if
+            on error errMsg
+                log "Error in getOrCreateTagSafely for '" & tagName & "': " & errMsg
+                return missing value
+            end try
+        end tell
+    end tell
+end getOrCreateTagSafely
+
+-- Helper function: Multi-strategy tag assignment with fallbacks
+on assignTagsWithFallback(newTask, tagsList, docRef)
+    set assignedTags to {}
+    set failedTags to {}
+    
+    repeat with tagName in tagsList
+        set tagName to my trimWhitespace(tagName as text)
+        if tagName is not "" then
+            set tagRef to my getOrCreateTagSafely(tagName, docRef)
+            set tagAssigned to false
+            
+            if tagRef is not missing value then
+                -- Strategy A: Individual tag assignment
+                try
+                    tell application "OmniFocus"
+                        tell docRef
+                            add tagRef to tags of newTask
+                        end tell
+                    end tell
+                    set end of assignedTags to tagName
+                    set tagAssigned to true
+                    log "Strategy A success - Individual assignment for: " & tagName
+                on error errMsg1
+                    log "Strategy A failed for '" & tagName & "': " & errMsg1
+
+                    -- Strategy B: Direct tag property assignment
+                    try
+                        tell application "OmniFocus"
+                            tell docRef
+                                tell newTask
+                                    set tags to tags & {tagRef}
+                                end tell
+                            end tell
+                        end tell
+                        set end of assignedTags to tagName
+                        set tagAssigned to true
+                        log "Strategy B success - Property assignment for: " & tagName
+                    on error errMsg2
+                        log "Strategy B failed for '" & tagName & "': " & errMsg2
+                        set end of failedTags to tagName
+                    end try
+                end try
+            else
+                set end of failedTags to tagName
+            end if
+        end if
+    end repeat
+    
+    -- Strategy C: If no tags assigned and we have tags, try primary tag approach
+    if (count of assignedTags) = 0 and (count of tagsList) > 0 then
+        set firstTagName to my trimWhitespace(item 1 of tagsList as text)
+        if firstTagName is not "" then
+            try
+                set primaryTagRef to my getOrCreateTagSafely(firstTagName, docRef)
+                if primaryTagRef is not missing value then
+                    tell application "OmniFocus"
+                        tell docRef
+                            set primary tag of newTask to primaryTagRef
+                        end tell
+                    end tell
+                    set end of assignedTags to firstTagName
+                    log "Strategy C success - Primary tag assignment for: " & firstTagName
+                end if
+            on error errMsg3
+                log "Strategy C failed for '" & firstTagName & "': " & errMsg3
+            end try
+        end if
+    end if
+    
+    -- Log final results
+    if (count of assignedTags) > 0 then
+        log "Successfully assigned tags: " & my listToString(assignedTags)
+    end if
+    if (count of failedTags) > 0 then
+        log "Failed to assign tags: " & my listToString(failedTags)
+    end if
+    
+    return {assigned:assignedTags, failed:failedTags}
+end assignTagsWithFallback
+
+-- Helper function: Convert list to comma-separated string
+on listToString(theList)
+    set AppleScript's text item delimiters to ", "
+    set theString to theList as string
+    set AppleScript's text item delimiters to ""
+    return theString
+end listToString
