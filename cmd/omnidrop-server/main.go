@@ -1,14 +1,18 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -125,8 +129,38 @@ func main() {
 		})
 	})
 
-	// Start server
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+	// Start server with graceful shutdown
+	srv := &http.Server{
+		Addr:         ":" + port,
+		Handler:      nil, // Use default mux
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	// Start server in goroutine
+	go func() {
+		log.Printf("🚀 Server starting on port %s", port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server failed to start: %v", err)
+		}
+	}()
+
+	// Wait for interrupt signal
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	<-c
+
+	// Graceful shutdown
+	log.Println("🛑 Shutting down server...")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("Server forced to shutdown: %v", err)
+	} else {
+		log.Println("✅ Server gracefully stopped")
+	}
 }
 
 func createOmniFocusTask(task TaskRequest) TaskResponse {

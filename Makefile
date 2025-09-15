@@ -59,9 +59,21 @@ dev:
 	fi
 	$(GOCMD) run $(CMD_DIR)/main.go
 
-## install: Install the application and LaunchAgent
+## install: Install the application and LaunchAgent with proper service lifecycle
 install: build
-	@echo "Installing $(BINARY_NAME)..."
+	@echo "Installing $(BINARY_NAME) with proper service lifecycle..."
+
+	@# Phase 1: Stop existing service gracefully
+	@echo "🛑 Stopping existing service..."
+	@launchctl stop com.oshiire.omnidrop 2>/dev/null || true
+	@sleep 2  # Allow time for graceful shutdown
+
+	@# Phase 2: Unload service completely
+	@echo "📤 Unloading LaunchAgent..."
+	@launchctl unload $(LAUNCHD_DIR)/$(LAUNCHD_PLIST) 2>/dev/null || true
+
+	@# Phase 3: Install files
+	@echo "📁 Installing files..."
 	@# Create directories
 	mkdir -p $(INSTALL_DIR) $(CONFIG_DIR) $(LOG_DIR) $(SCRIPT_DIR) $(WORK_DIR) $(LAUNCHD_DIR)
 
@@ -97,14 +109,24 @@ install: build
 	fi
 	chmod 644 $(LAUNCHD_DIR)/$(LAUNCHD_PLIST)
 
-	@# Load LaunchAgent
-	launchctl load $(LAUNCHD_DIR)/$(LAUNCHD_PLIST) 2>/dev/null || true
+	@# Phase 4: Load with persistence and auto-start
+	@echo "🚀 Loading and starting service..."
+	launchctl load -w $(LAUNCHD_DIR)/$(LAUNCHD_PLIST)
+
+	@# Phase 5: Verify startup
+	@echo "✅ Verifying service startup..."
+	@sleep 3
+	@if launchctl list | grep -q com.oshiire.omnidrop; then \
+		echo "✅ Service successfully started"; \
+	else \
+		echo "⚠️ Service may not have started properly"; \
+		echo "Check logs: make logs"; \
+	fi
 
 	@echo "Installation completed!"
 	@echo "Binary: $(INSTALL_DIR)/$(BINARY_NAME)"
 	@echo "Script: $(SCRIPT_DIR)/$(APPLESCRIPT_FILE)"
-	@echo "Service will start automatically on login."
-	@echo "Use 'make start' to start the service now."
+	@echo "Service is running and will start automatically on login."
 
 ## uninstall: Remove the application and LaunchAgent
 uninstall:
@@ -122,7 +144,6 @@ uninstall:
 ## start: Start the LaunchAgent service
 start:
 	@echo "Starting $(BINARY_NAME) service..."
-	launchctl load $(LAUNCHD_DIR)/$(LAUNCHD_PLIST) 2>/dev/null || \
 	launchctl start com.oshiire.omnidrop
 
 ## stop: Stop the LaunchAgent service
