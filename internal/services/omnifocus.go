@@ -10,19 +10,6 @@ import (
 	"omnidrop/internal/config"
 )
 
-type TaskCreateRequest struct {
-	Title   string
-	Note    string
-	Project string
-	Tags    []string
-}
-
-type TaskCreateResponse struct {
-	Status  string
-	Created bool
-	Reason  string
-}
-
 type OmniFocusService struct {
 	cfg *config.Config
 }

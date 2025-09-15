@@ -2,13 +2,10 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -35,13 +32,17 @@ func main() {
 	log.Printf("🚀 OmniDrop Server %s (built at %s)", Version, BuildTime)
 	log.Printf("📡 Starting server on port %s", cfg.Port)
 	log.Printf("🔐 Authentication token configured: %t", cfg.Token != "")
-	log.Printf("📁 Working directory: %s", getWorkingDir())
-
-	// Test AppleScript accessibility
-	testAppleScriptAccess()
+	log.Printf("📁 Working directory: %s", services.GetWorkingDirectory())
 
 	// Initialize services
+	healthService := services.NewHealthService(cfg)
 	omniFocusService := services.NewOmniFocusService(cfg)
+
+	// Test AppleScript accessibility
+	healthResult := healthService.CheckAppleScriptHealth()
+	if !healthResult.AppleScriptAccessible {
+		log.Printf("⚠️ AppleScript health check failed: %v", healthResult.Errors)
+	}
 
 	// Initialize handlers
 	h := handlers.New(cfg, omniFocusService)
@@ -91,64 +92,5 @@ func main() {
 		log.Printf("Server forced to shutdown: %v", err)
 	} else {
 		log.Println("✅ Server gracefully stopped")
-	}
-}
-
-
-func getWorkingDir() string {
-	wd, err := os.Getwd()
-	if err != nil {
-		return "unknown"
-	}
-	return wd
-}
-
-func testAppleScriptAccess() {
-	log.Printf("🍎 Testing AppleScript access...")
-
-	// Get user's home directory
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		log.Printf("❌ Cannot get home directory: %v", err)
-		return
-	}
-
-	// Try different paths for the AppleScript
-	// Development location is checked first for testing
-	scriptPaths := []string{
-		"omnidrop.applescript",
-		fmt.Sprintf("%s/.local/share/omnidrop/omnidrop.applescript", homeDir),
-	}
-
-	var foundScript string
-	for _, path := range scriptPaths {
-		if _, err := os.Stat(path); err == nil {
-			foundScript = path
-			break
-		}
-	}
-
-	if foundScript == "" {
-		log.Printf("⚠️ AppleScript file not found in expected locations")
-		return
-	}
-
-	log.Printf("✅ AppleScript found: %s", foundScript)
-
-	// Test basic AppleScript execution
-	cmd := exec.Command("osascript", "-e", "tell application \"System Events\" to get name of processes")
-	output, err := cmd.Output()
-	if err != nil {
-		log.Printf("❌ AppleScript test failed: %v", err)
-		return
-	}
-
-	log.Printf("✅ AppleScript accessibility confirmed")
-
-	// Check if OmniFocus is available
-	if strings.Contains(string(output), "OmniFocus") {
-		log.Printf("✅ OmniFocus detected in running processes")
-	} else {
-		log.Printf("⚠️ OmniFocus not currently running")
 	}
 }
