@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 
 	"omnidrop/internal/config"
@@ -61,12 +62,20 @@ func TestNewHealthServiceWithExecutor(t *testing.T) {
 }
 
 func TestHealthServiceImpl_CheckAppleScriptHealth_Success(t *testing.T) {
+	// Create a temporary test script
+	testScript := "./temp_test_script.applescript"
+	err := createTempTestScript(testScript)
+	if err != nil {
+		t.Fatalf("Failed to create temp test script: %v", err)
+	}
+	defer removeTempTestScript(testScript)
+
 	cfg := &config.Config{
 		Token:           "test-token",
 		Port:            "8788",
 		Environment:     "test",
-		ScriptPath:      "./test_script.applescript",
-		AppleScriptFile: "test_script.applescript",
+		ScriptPath:      testScript,
+		AppleScriptFile: "temp_test_script.applescript",
 	}
 
 	// Create a mock executor that simulates success
@@ -212,4 +221,23 @@ func TestHealthResult_Structure(t *testing.T) {
 	if result.Details != "test details" {
 		t.Errorf("Expected Details to be 'test details', got %s", result.Details)
 	}
+}
+
+// Helper functions for test script management
+func createTempTestScript(path string) error {
+	content := `#!/usr/bin/osascript
+# Temporary test script
+return "test"`
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(content)
+	return err
+}
+
+func removeTempTestScript(path string) {
+	os.Remove(path)
 }
