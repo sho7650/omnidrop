@@ -1,18 +1,22 @@
 # OmniDrop
 
-A lightweight REST API server that bridges external applications with OmniFocus on macOS. Create OmniFocus tasks programmatically through a simple HTTP API with built-in service management and easy installation.
+A lightweight REST API server that bridges external applications with OmniFocus on macOS. Create OmniFocus tasks programmatically through a simple HTTP API with built-in service management, environment separation, and comprehensive testing infrastructure.
 
 ## Features
 
 - 🚀 Simple REST API for task creation
 - 🔐 Bearer token authentication for security
 - 📝 Support for task notes, projects, and tags
+- 🏗️ **Hierarchical project support** with path-based project references
+- 🏷️ **Automatic tag creation** - creates new tags in OmniFocus if they don't exist
 - ⏰ Automatic due date setting (end of current day)
-- 🍎 Native OmniFocus integration via AppleScript
-- 🔧 Environment-based configuration with `.env` support
-- 🛠️ Comprehensive build system with Makefile
-- 🔄 macOS LaunchAgent service management
-- 📋 Automatic installation and service setup
+- 🍎 Native OmniFocus 4 integration via enhanced AppleScript
+- 🔧 **Environment-based configuration** with complete isolation (production/development/test)
+- 🛠️ **Comprehensive build system** with Makefile and testing infrastructure
+- 🔄 **Reliable LaunchAgent lifecycle management** with graceful shutdown
+- 📋 **Idempotent installation** with proper service management
+- 🧪 **Complete testing suite** with isolated environments and production protection
+- 📊 **Multi-environment support** with port validation and script isolation
 
 ## Quick Start
 
@@ -20,14 +24,14 @@ Get up and running in 3 commands:
 
 ```bash
 # 1. Clone and setup
-git clone https://github.com/yourusername/omnidrop.git
+git clone https://github.com/sho7650/omnidrop.git
 cd omnidrop
 
 # 2. Configure (edit TOKEN)
 cp .env.example .env
 
 # 3. Install and start service
-make install && make start
+make install
 ```
 
 Your OmniDrop server is now running at `http://localhost:8787`!
@@ -35,7 +39,7 @@ Your OmniDrop server is now running at `http://localhost:8787`!
 ## Prerequisites
 
 - macOS (required for OmniFocus and AppleScript)
-- OmniFocus 3 or later installed
+- OmniFocus 4 or later installed and running
 - Go 1.25.0 or later
 - Python 3 (for JSON parsing in AppleScript)
 
@@ -43,40 +47,41 @@ Your OmniDrop server is now running at `http://localhost:8787`!
 
 ### Production Installation (Recommended)
 
-Full installation with automatic service management:
+Full installation with automatic service management and proper lifecycle handling:
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/omnidrop.git
+git clone https://github.com/sho7650/omnidrop.git
 cd omnidrop
 
 # Configure environment
 cp .env.example .env
 # Edit .env and set your secure TOKEN
 
-# Install everything (binary, service, AppleScript)
+# Install everything with proper service lifecycle
 make install
-
-# Start the service
-make start
-
-# Check status
-make status
 ```
 
+The new install process:
+1. **🛑 Stops** existing service gracefully
+2. **📤 Unloads** service completely to prevent conflicts
+3. **📁 Installs** files (binary, script, plist)
+4. **🚀 Loads** with persistence (`-w` flag) for reliable startup
+5. **✅ Verifies** service startup with user feedback
+
 This installs:
-- Binary: `~/bin/omnidrop-server`
+- Binary: `~/bin/omnidrop-server` (with graceful shutdown support)
 - AppleScript: `~/.local/share/omnidrop/omnidrop.applescript`
 - LaunchAgent: `~/Library/LaunchAgents/com.oshiire.omnidrop.plist`
 - Logs: `~/.local/log/omnidrop/`
 
 ### Development Installation
 
-For development and testing:
+For development and testing with complete environment isolation:
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/omnidrop.git
+git clone https://github.com/sho7650/omnidrop.git
 cd omnidrop
 
 # Install dependencies
@@ -86,19 +91,59 @@ make deps
 cp .env.example .env
 # Edit .env and set your TOKEN
 
-# Run development server
-make dev
+# Run isolated development server (port 8788)
+make dev-isolated
+
+# Or run with direct go run
+TOKEN=dev-token make dev
+```
+
+## Environment Management
+
+OmniDrop supports complete environment separation for safe development and testing:
+
+### Environment Variables
+
+**Required:**
+- `TOKEN`: Bearer token for API authentication
+
+**Environment Control:**
+- `OMNIDROP_ENV`: Environment mode (`production`, `development`, `test`)
+- `PORT`: Server port (8787=production, 8788-8799=test range)
+- `OMNIDROP_SCRIPT`: Explicit path to AppleScript file (overrides auto-detection)
+
+### Environment-Specific Configuration
+
+The server automatically selects appropriate configurations:
+
+| Environment | Port Range | Script Location | Use Case |
+|-------------|------------|-----------------|----------|
+| `production` | 8787 (protected) | `~/.local/share/omnidrop/omnidrop.applescript` | Production deployment |
+| `development` | Any | `./omnidrop.applescript` | Local development |
+| `test` | 8788-8799 | Isolated test location | Automated testing |
+
+### Multi-Environment Commands
+
+```bash
+# Development (port 8788)
+make dev-isolated
+
+# Staging/Testing (port 8790)
+TOKEN=test-token make staging
+
+# Production (port 8787, with confirmation)
+TOKEN=prod-token make production-run
 ```
 
 ## Service Management
 
-Control the OmniDrop service with simple commands:
+### Basic Service Control
 
 ```bash
 # Start service
 make start
 
-# Stop service
+# Stop service (now works reliably with graceful shutdown)
 make stop
 
 # Check service status
@@ -114,16 +159,59 @@ make logs-follow
 make stop && make start
 ```
 
-### Service Status
+### Advanced Service Management
 
-Check if OmniDrop is running:
 ```bash
-make status
-# Output: Service status with PID if running
+# Check detailed service status
+launchctl list | grep com.oshiire.omnidrop
 
-launchctl list | grep omnidrop
-# Output: Shows service details if loaded
+# Manual service control (if needed)
+launchctl stop com.oshiire.omnidrop
+launchctl start com.oshiire.omnidrop
+
+# Reinstall service with proper lifecycle
+make install  # Now idempotent and safe to run multiple times
 ```
+
+## Testing Infrastructure
+
+### Comprehensive Testing Suite
+
+```bash
+# Run pre-flight validation (checks environment safety)
+make test-preflight
+
+# Run complete isolated test suite (7 comprehensive tests)
+make test-isolated
+
+# Run standard Go tests
+make test
+```
+
+### Test Environments
+
+**Isolated Testing:**
+- Complete environment separation from production
+- Temporary test directories and AppleScript files
+- Port range validation (8788-8799)
+- Automatic cleanup after testing
+
+**Production Protection:**
+- Port 8787 reserved for production only
+- Production script path protection
+- Environment variable validation
+- Pre-flight safety checks
+
+### Test Coverage
+
+The test suite covers:
+1. ✅ Simple task creation (no tags)
+2. ✅ Task with existing tags
+3. ✅ Task with automatic tag creation
+4. ✅ Task with mixed existing and new tags
+5. ✅ Task with hierarchical project assignment
+6. ✅ Complex task with all features
+7. ✅ Invalid request handling (authorization)
 
 ## Development
 
@@ -131,77 +219,74 @@ launchctl list | grep omnidrop
 
 **Development:**
 ```bash
-make dev     # Run with go run (requires TOKEN env var)
-make run     # Build and run binary
-make build   # Build binary only
-make test    # Run tests
+make dev              # Run with go run (requires TOKEN env var)
+make dev-isolated     # Run isolated development server (port 8788)
+make run              # Build and run binary
+make build            # Build binary only
+make test             # Run standard Go tests
+make test-isolated    # Run comprehensive isolated test suite
+make test-preflight   # Run environment validation checks
 ```
 
-**Installation:**
+**Environment Management:**
 ```bash
-make install    # Install service and components
-make uninstall  # Remove everything
-make clean      # Clean build artifacts
-make deps       # Download dependencies
+make staging          # Run staging environment (port 8790)
+make production-run   # Run production server (port 8787, protected)
+```
+
+**Installation & Service:**
+```bash
+make install          # Install with proper LaunchAgent lifecycle
+make uninstall        # Complete removal
+make clean            # Clean build artifacts
+make deps             # Download dependencies
 ```
 
 **Service Management:**
 ```bash
-make start       # Start service
-make stop        # Stop service
-make status      # Check status
-make logs        # Show recent logs
-make logs-follow # Follow logs real-time
+make start            # Start service (now reliable)
+make stop             # Stop service (graceful shutdown)
+make status           # Check status
+make logs             # Show recent logs
+make logs-follow      # Follow logs real-time
+make help             # Show all available targets
 ```
 
 ### Development Workflow
 
 ```bash
-# Development cycle
-TOKEN="dev-token" make dev    # Direct development
-make test                     # Run tests
-make build                    # Build binary
-make run                      # Test built binary
+# Safe development cycle
+TOKEN="dev-token" make dev-isolated    # Isolated development (port 8788)
+make test-preflight                    # Validate environment safety
+make test-isolated                     # Run comprehensive tests
+make build                             # Build binary
 
-# When ready for production
-make install                  # Install service
-make start                    # Start service
-make logs                     # Check logs
+# When ready for production testing
+TOKEN="staging-token" make staging     # Staging test (port 8790)
+
+# Production deployment
+make install                           # Install with proper lifecycle
+make status                            # Verify service
+make logs                              # Check logs
 ```
 
-### Running Tests
+### Testing Best Practices
 
+**Always use test environments:**
 ```bash
-make test
+# ✅ Good: Use test ports
+make dev-isolated    # port 8788
+make staging         # port 8790
+
+# ❌ Bad: Never use production port for testing
+# PORT=8787 # NEVER for testing
 ```
 
-### Building for Distribution
-
+**Run validation before changes:**
 ```bash
-# Build for current platform
-make build
-
-# Manual builds for specific platforms
-GOOS=darwin GOARCH=amd64 go build -o build/bin/omnidrop-server-amd64 ./cmd/omnidrop-server
-GOOS=darwin GOARCH=arm64 go build -o build/bin/omnidrop-server-arm64 ./cmd/omnidrop-server
+make test-preflight  # Check environment safety
+make test-isolated   # Run full test suite
 ```
-
-## Configuration
-
-Create a `.env` file in the project root with the following variables:
-
-```env
-# Required: Authentication token for API access
-TOKEN=your-secret-token-here
-
-# Optional: Server port (default: 8787)
-PORT=8787
-```
-
-The server loads environment variables in this order:
-1. Project root `.env` file (recommended)
-2. Command directory `.env` file (fallback)
-3. System environment variables
 
 ## API Reference
 
@@ -216,12 +301,43 @@ The server loads environment variables in this order:
 **Request Body:**
 ```json
 {
-  "title": "Task title",        // Required: The task name
-  "note": "Task description",   // Optional: Additional notes
-  "project": "Project Name",    // Optional: Exact project name in OmniFocus
-  "tags": ["tag1", "tag2"]      // Optional: Array of tag names
+  "title": "Task title",                    // Required: The task name
+  "note": "Task description",               // Optional: Additional notes
+  "project": "Project Name",                // Optional: Project name or hierarchical path
+  "tags": ["tag1", "tag2"]                  // Optional: Array of tag names (auto-created if missing)
 }
 ```
+
+### Enhanced Project Support
+
+**Hierarchical Projects:**
+```json
+{
+  "title": "Review documentation",
+  "project": "Getting Things Done/3. Projects/Work/Documentation"
+}
+```
+
+**Simple Projects:**
+```json
+{
+  "title": "Quick task",
+  "project": "Work"
+}
+```
+
+### Automatic Tag Management
+
+**Automatic Tag Creation:**
+```json
+{
+  "title": "New feature development",
+  "tags": ["urgent", "new-feature", "auto-created-tag"]
+}
+```
+- Existing tags are applied normally
+- Non-existent tags are automatically created in OmniFocus
+- Multi-strategy tag assignment with fallback mechanisms
 
 **Response:**
 
@@ -258,7 +374,7 @@ curl -X POST http://localhost:8787/tasks \
   -d '{"title":"Review pull request"}'
 ```
 
-#### Task with Project and Tags
+#### Task with Hierarchical Project and Auto-Created Tags
 ```bash
 curl -X POST http://localhost:8787/tasks \
   -H "Authorization: Bearer your-secret-token" \
@@ -266,18 +382,21 @@ curl -X POST http://localhost:8787/tasks \
   -d '{
     "title": "Complete project documentation",
     "note": "Update API docs and add examples",
-    "project": "Work",
-    "tags": ["urgent", "documentation"]
+    "project": "Getting Things Done/3. Projects/Work/Documentation",
+    "tags": ["urgent", "documentation", "new-auto-tag"]
   }'
 ```
 
-#### Using HTTPie
+#### Development Testing (use test port)
 ```bash
-http POST localhost:8787/tasks \
-  Authorization:"Bearer your-secret-token" \
-  title="Call client" \
-  note="Discuss project timeline" \
-  project="Sales"
+curl -X POST http://localhost:8788/tasks \
+  -H "Authorization: Bearer test-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Test task creation",
+    "project": "Test Project",
+    "tags": ["test", "development"]
+  }'
 ```
 
 ## Project Structure
@@ -286,50 +405,72 @@ http POST localhost:8787/tasks \
 omnidrop/
 ├── cmd/
 │   └── omnidrop-server/
-│       └── main.go             # HTTP server implementation
+│       └── main.go                     # HTTP server with graceful shutdown
+├── scripts/
+│   ├── run-isolated-test.sh            # Comprehensive test execution
+│   ├── test-preflight.sh               # Environment validation
+│   └── test-tag-functionality.sh       # Tag handling tests
 ├── init/
 │   └── launchd/
-│       └── com.oshiire.omnidrop.plist  # LaunchAgent template
-├── build/                      # Build artifacts (created by make)
-├── test/
-│   └── integration/            # Integration tests
-├── omnidrop.applescript        # OmniFocus integration script
-├── Makefile                    # Build and service management
-├── go.mod                      # Go module definition
-├── go.sum                      # Dependency checksums
-├── .env.example                # Environment configuration template
-├── .env                        # Local environment configuration (git-ignored)
-├── CLAUDE.md                   # AI assistant guidance
-└── README.md                   # This file
+│       └── com.oshiire.omnidrop.plist  # LaunchAgent with environment config
+├── build/                              # Build artifacts (created by make)
+├── omnidrop.applescript                # Enhanced OmniFocus 4 integration
+├── Makefile                            # Comprehensive build and service management
+├── go.mod                              # Go module definition
+├── go.sum                              # Dependency checksums
+├── .env.example                        # Environment configuration template
+├── .env                                # Local environment configuration (git-ignored)
+├── CLAUDE.md                           # AI assistant guidance with implementation details
+└── README.md                           # This file
 ```
 
 ## How It Works
 
-1. **HTTP Server** (`cmd/omnidrop-server/main.go`):
-   - Receives POST requests with task data
-   - Validates Bearer token authentication
-   - Passes task data to AppleScript bridge
+### 1. HTTP Server (`cmd/omnidrop-server/main.go`)
+- Receives POST requests with task data
+- Validates Bearer token authentication
+- **Environment-aware AppleScript path resolution**
+- **Graceful shutdown with SIGTERM handling**
+- **Production environment protection and validation**
+- Passes task data to AppleScript bridge
 
-2. **AppleScript Bridge** (`omnidrop.applescript`):
-   - Parses JSON data using Python
-   - Creates tasks in OmniFocus using AppleScript automation
-   - Sets due date to 23:59:59 of current day
-   - Handles project assignment and tag management
+### 2. Enhanced AppleScript Bridge (`omnidrop.applescript`)
+- **OmniFocus 4 compatibility** with proper API usage
+- **Hierarchical project resolution** with folder navigation
+- **Multi-strategy tag assignment** with automatic tag creation
+- **Comprehensive error handling** with detailed logging
+- Parses JSON data using Python integration
+- Sets due date to 23:59:59 of current day
 
-3. **Service Management** (`Makefile` + `init/launchd/`):
-   - Installs binary and AppleScript to standard locations
-   - Creates LaunchAgent for automatic startup
-   - Provides service control commands
-   - Manages logs and configuration
+### 3. Service Management (`Makefile` + `init/launchd/`)
+- **Proper LaunchAgent lifecycle management** (stop → unload → install → load -w)
+- **Idempotent installation** - safe to run multiple times
+- **Environment-specific configuration** with production protection
+- **Comprehensive testing infrastructure** with isolation
+- Provides service control commands with validation
+- Manages logs and configuration
 
 ## Important Notes
 
-- **Project Names**: Must exactly match existing projects in OmniFocus
-- **Tags**: Non-existent tags are silently ignored
+### Project and Tag Handling
+- **Hierarchical Projects**: Use path format like `"Folder/Subfolder/Project"`
+- **Simple Projects**: Use exact project name like `"Work"`
+- **Automatic Tag Creation**: New tags are automatically created in OmniFocus
+- **Tag Assignment**: Multi-strategy approach with fallback mechanisms
 - **Due Dates**: All tasks are automatically set to due at end of current day (23:59:59)
 - **Inbox**: Tasks without a project are created in the OmniFocus inbox
-- **Security**: Always use HTTPS in production and keep your token secure
-- **Service**: Automatically starts on login when installed via `make install`
+
+### Environment Safety
+- **Production Protection**: Port 8787 is protected and requires explicit confirmation
+- **Environment Isolation**: Complete separation between development, test, and production
+- **Script Isolation**: Each environment uses its own AppleScript file
+- **Test Port Range**: 8788-8799 reserved for testing to prevent production conflicts
+
+### Service Management
+- **Graceful Shutdown**: Server properly handles SIGTERM for reliable `launchctl stop`
+- **Reliable Startup**: LaunchAgent loads with `-w` flag for persistence
+- **Idempotent Install**: `make install` can be run multiple times safely
+- **Service Validation**: Install process verifies successful startup
 
 ## Troubleshooting
 
@@ -337,25 +478,54 @@ omnidrop/
 
 **Service won't start:**
 ```bash
-make status          # Check if service is loaded
-make logs           # Check for error messages
+make status                    # Check if service is loaded
+make logs                      # Check for error messages
+make test-preflight           # Validate environment
 launchctl list | grep omnidrop  # Verify LaunchAgent status
 ```
 
-**Service keeps crashing:**
+**Service keeps crashing or won't stop:**
 ```bash
-make logs           # Check error logs
-make uninstall      # Clean removal
-make install        # Fresh installation
+make logs                      # Check error logs
+make uninstall                 # Clean removal with proper lifecycle
+make install                   # Fresh installation with validation
+```
+
+**Installation conflicts:**
+```bash
+# The new install process handles this automatically:
+make install                   # Stops → unloads → installs → loads → verifies
+```
+
+### Environment Issues
+
+**Wrong environment or port conflicts:**
+```bash
+make test-preflight           # Comprehensive environment validation
+echo $OMNIDROP_ENV           # Check current environment
+echo $PORT                   # Check current port
+```
+
+**Production environment protection:**
+```bash
+# If accidentally using production resources:
+unset OMNIDROP_ENV PORT OMNIDROP_SCRIPT  # Clear environment
+make dev-isolated             # Use safe development environment
 ```
 
 ### API Issues
 
 **"AppleScript error" Response:**
-- Ensure OmniFocus is running
-- Check that project/tag names match exactly with OmniFocus
+- Ensure OmniFocus 4 is running
+- Check that project paths use correct folder hierarchy
 - Verify Python 3 is installed: `python3 --version`
 - Check AppleScript permissions in System Preferences
+- Review AppleScript logs for detailed error information
+
+**Tag creation issues:**
+- New tags are automatically created - no manual setup needed
+- Check OmniFocus tags section to verify new tags were created
+- Review AppleScript logs for tag assignment details
 
 **"Unauthorized" Response:**
 - Verify the token in your `.env` file matches the request
@@ -364,6 +534,7 @@ make install        # Fresh installation
 
 **"Server Won't Start":**
 - Check if port is already in use: `lsof -i :8787`
+- Run environment validation: `make test-preflight`
 - Verify `.env` file exists and TOKEN is set
 - Check file permissions on AppleScript file
 
@@ -371,50 +542,63 @@ make install        # Fresh installation
 
 **Build failures:**
 ```bash
-make clean          # Clean build artifacts
-make deps           # Reinstall dependencies
-go mod tidy         # Clean module dependencies
+make clean                    # Clean build artifacts
+make deps                     # Reinstall dependencies
+go mod tidy                   # Clean module dependencies
+```
+
+**Test failures:**
+```bash
+make test-preflight          # Check environment setup
+make test-isolated           # Run isolated test suite
+# Check logs for specific test failure details
 ```
 
 **Environment loading issues:**
 ```bash
-make dev            # Use TOKEN= env var directly
-ls -la .env         # Verify .env file exists
-cat .env            # Check .env contents (remove TOKEN first!)
+TOKEN=test-token make dev-isolated  # Use explicit token
+ls -la .env                  # Verify .env file exists
+# Check OMNIDROP_ENV, PORT, OMNIDROP_SCRIPT variables
 ```
 
 ### Log Analysis
 
 ```bash
-# View recent logs
+# View recent logs with timestamps
 make logs
 
-# Follow logs in real-time
+# Follow logs in real-time for debugging
 make logs-follow
 
 # View specific log files
 tail -f ~/.local/log/omnidrop/stdout.log
 tail -f ~/.local/log/omnidrop/stderr.log
+
+# Check AppleScript execution logs for task creation details
+grep -i "tag\|project\|error" ~/.local/log/omnidrop/stdout.log
 ```
 
 ## Security Considerations
 
 - **Token Storage**: Never commit `.env` files with real tokens
+- **Environment Separation**: Use different tokens for development/staging/production
 - **HTTPS**: Use a reverse proxy (nginx/caddy) for HTTPS in production
 - **Token Rotation**: Regularly rotate your authentication tokens
 - **Network Access**: Bind to localhost only unless external access is required
 - **File Permissions**: Ensure proper permissions on `.env` and log files
 - **Service Security**: LaunchAgent runs as user, not root (safer)
+- **Port Protection**: Production port 8787 is protected from accidental test usage
 
 ## Uninstalling
 
-Complete removal of OmniDrop:
+Complete removal of OmniDrop with proper service lifecycle:
 
 ```bash
 make uninstall
 ```
 
-This removes:
+This safely removes:
+- Stops and unloads the LaunchAgent service
 - Binary from `~/bin/`
 - AppleScript from `~/.local/share/omnidrop/`
 - LaunchAgent from `~/Library/LaunchAgents/`
@@ -424,6 +608,12 @@ This removes:
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+### Development Guidelines
+- Use `make test-preflight` before submitting changes
+- Run `make test-isolated` to verify all functionality
+- Follow environment separation best practices
+- Test with multiple environments (development/staging)
 
 ## License
 
@@ -435,3 +625,16 @@ Built with:
 - [Go](https://golang.org/) - The programming language
 - [godotenv](https://github.com/joho/godotenv) - Environment variable management
 - [OmniFocus](https://www.omnigroup.com/omnifocus) - Task management application
+
+## Recent Improvements
+
+**v2.0 - Enhanced Environment Management & Reliability:**
+- ✨ **Hierarchical project support** with folder path navigation
+- 🏷️ **Automatic tag creation** with multi-strategy assignment
+- 🔧 **Complete environment separation** (production/development/test)
+- 🛠️ **Proper LaunchAgent lifecycle management** with graceful shutdown
+- 📋 **Idempotent installation** process
+- 🧪 **Comprehensive testing infrastructure** with production protection
+- 🔄 **Reliable service management** with startup verification
+
+These improvements provide enterprise-grade reliability with complete environment isolation and robust service management.
