@@ -25,13 +25,13 @@ type TaskResponse struct {
 }
 
 type Handlers struct {
-	cfg             *config.Config
+	cfg              *config.Config
 	omniFocusService services.OmniFocusServiceInterface
 }
 
 func New(cfg *config.Config, omniFocusService services.OmniFocusServiceInterface) *Handlers {
 	return &Handlers{
-		cfg:             cfg,
+		cfg:              cfg,
 		omniFocusService: omniFocusService,
 	}
 }
@@ -41,26 +41,26 @@ func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeMethodNotAllowedError(w, "Only POST method is allowed for task creation")
 		return
 	}
 
 	// Check authentication
 	if !h.authenticateRequest(r) {
-		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		writeAuthenticationError(w, "Invalid or missing authentication token")
 		return
 	}
 
 	// Parse request body
 	var taskReq TaskRequest
 	if err := json.NewDecoder(r.Body).Decode(&taskReq); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeValidationError(w, "Invalid JSON format in request body")
 		return
 	}
 
 	// Validate required fields
 	if taskReq.Title == "" {
-		http.Error(w, "Title is required", http.StatusBadRequest)
+		writeValidationError(w, "Title field is required and cannot be empty")
 		return
 	}
 
@@ -75,7 +75,8 @@ func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
 	// Return response
 	w.Header().Set("Content-Type", "application/json")
 	if response.Status == "error" {
-		w.WriteHeader(http.StatusInternalServerError)
+		writeAppleScriptError(w, response.Reason, nil)
+		return
 	}
 
 	taskResponse := TaskResponse{
@@ -84,15 +85,19 @@ func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
 		Reason:  response.Reason,
 	}
 
-	json.NewEncoder(w).Encode(taskResponse)
+	if err := json.NewEncoder(w).Encode(taskResponse); err != nil {
+		writeInternalError(w, "Failed to encode response", err)
+	}
 }
 
 func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"status":  "ok",
 		"version": h.getVersion(),
-	})
+	}); err != nil {
+		writeInternalError(w, "Failed to encode health response", err)
+	}
 }
 
 func (h *Handlers) authenticateRequest(r *http.Request) bool {

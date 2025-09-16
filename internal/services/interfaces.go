@@ -39,8 +39,8 @@ type AppleScriptExecutor interface {
 // HealthResult contains structured health check information
 type HealthResult struct {
 	AppleScriptAccessible bool     `json:"applescript_accessible"`
-	OmniFocusRunning     bool     `json:"omnifocus_running"`
-	ScriptPath           string   `json:"script_path"`
-	Errors              []string `json:"errors,omitempty"`
-	Details             string   `json:"details,omitempty"`
+	OmniFocusRunning      bool     `json:"omnifocus_running"`
+	ScriptPath            string   `json:"script_path"`
+	Errors                []string `json:"errors,omitempty"`
+	Details               string   `json:"details,omitempty"`
 }

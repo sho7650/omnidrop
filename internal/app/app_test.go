@@ -215,7 +215,7 @@ func TestApplication_Lifecycle(t *testing.T) {
 
 	// Verify all components are initialized
 	if app.config == nil || app.healthService == nil ||
-	   app.omniFocusService == nil || app.server == nil {
+		app.omniFocusService == nil || app.server == nil {
 		t.Error("Not all components were initialized")
 	}
 

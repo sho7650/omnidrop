@@ -45,9 +45,9 @@ func (m *MockHealthService) CheckAppleScriptHealth() services.HealthResult {
 	}
 	return services.HealthResult{
 		AppleScriptAccessible: true,
-		OmniFocusRunning:     true,
-		ScriptPath:           "/mock/path/omnidrop.applescript",
-		Details:             "Mock health check successful",
+		OmniFocusRunning:      true,
+		ScriptPath:            "/mock/path/omnidrop.applescript",
+		Details:               "Mock health check successful",
 	}
 }
 

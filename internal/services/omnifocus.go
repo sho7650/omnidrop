@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/pkg/errors"
 	"omnidrop/internal/config"
 )
 
@@ -29,7 +30,7 @@ func (s *OmniFocusService) CreateTask(ctx context.Context, req TaskCreateRequest
 	if err != nil {
 		return TaskCreateResponse{
 			Status: "error",
-			Reason: fmt.Sprintf("AppleScript path error: %v", err),
+			Reason: fmt.Sprintf("AppleScript path error: %v", errors.Wrap(err, "failed to resolve AppleScript path")),
 		}
 	}
 
@@ -47,11 +48,12 @@ func (s *OmniFocusService) CreateTask(ctx context.Context, req TaskCreateRequest
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
-		log.Printf("❌ AppleScript execution failed: %v", err)
+		wrappedErr := errors.Wrapf(err, "AppleScript execution failed for task '%s'", req.Title)
+		log.Printf("❌ AppleScript execution failed: %v", wrappedErr)
 		log.Printf("📄 AppleScript output: %s", string(output))
 		return TaskCreateResponse{
 			Status: "error",
-			Reason: fmt.Sprintf("AppleScript execution failed: %v - Output: %s", err, string(output)),
+			Reason: fmt.Sprintf("AppleScript execution failed: %v - Output: %s", wrappedErr, string(output)),
 		}
 	}
 
