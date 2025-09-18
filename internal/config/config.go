@@ -19,6 +19,9 @@ type Config struct {
 
 	// AppleScript configuration
 	AppleScriptFile string
+
+	// Files configuration
+	FilesDir string // Base directory for file operations
 }
 
 func Load() (*Config, error) {
@@ -31,6 +34,7 @@ func Load() (*Config, error) {
 		Environment:     getEnvWithDefault("OMNIDROP_ENV", ""),
 		ScriptPath:      os.Getenv("OMNIDROP_SCRIPT"),
 		AppleScriptFile: "omnidrop.applescript",
+		FilesDir:        getFilesDir(),
 	}
 
 	// Validate required configuration
@@ -164,4 +168,18 @@ func getEnvWithDefault(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+func getFilesDir() string {
+	if dir := os.Getenv("OMNIDROP_FILES_DIR"); dir != "" {
+		return dir
+	}
+
+	// Default location
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "./files" // Fallback to relative directory
+	}
+
+	return fmt.Sprintf("%s/.local/share/omnidrop/files", homeDir)
 }

@@ -4,17 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-OmniDrop is a lightweight REST API server that bridges external applications with OmniFocus on macOS. It receives HTTP POST requests with task data and creates corresponding tasks in OmniFocus using AppleScript automation.
+OmniDrop is a lightweight REST API server that provides Omnichannel Drop functionality - bridging external applications with both OmniFocus on macOS and local file systems. It receives HTTP POST requests for task creation in OmniFocus and file operations on the local file system.
 
 ## Architecture
 
-The system consists of two main components:
+The system consists of three main components:
 
 1. **HTTP Server** (`main.go`): Go-based REST API that:
    - Listens on a configurable port (default: 8787)
    - Requires Bearer token authentication
-   - Accepts POST requests to `/tasks` endpoint
-   - Validates JSON payloads and invokes AppleScript
+   - Accepts POST requests to `/tasks` and `/files` endpoints
+   - Validates JSON payloads and handles routing
    - **Environment-aware script resolution** for development/test isolation
 
 2. **AppleScript Bridge** (`omnidrop.applescript`): Handles **OmniFocus 4** integration:
@@ -22,6 +22,12 @@ The system consists of two main components:
    - Sets due dates to end of current day (23:59:59)
    - Supports hierarchical project assignment
    - **Multi-strategy tag management** with automatic tag creation
+
+3. **Files Service**: Handles **Local File Operations**:
+   - Creates files in specified directories within a secure base path
+   - **Path traversal protection** prevents unauthorized file access
+   - **Automatic directory creation** for nested folder structures
+   - **Environment-based configuration** for file storage location
 
 ## Development Commands
 
@@ -48,6 +54,18 @@ curl -X POST http://localhost:8788/tasks \
   -H "Authorization: Bearer test-token" \
   -H "Content-Type: application/json" \
   -d '{"title":"Test Task","note":"Description","project":"Getting Things Done/3. Projects/お仕事/Enablement","tags":["urgent"]}'
+
+# Test file creation endpoint (use test port!)
+curl -X POST http://localhost:8788/files \
+  -H "Authorization: Bearer test-token" \
+  -H "Content-Type: application/json" \
+  -d '{"filename":"report.txt","content":"Monthly report content"}'
+
+# Test file creation with directory (use test port!)
+curl -X POST http://localhost:8788/files \
+  -H "Authorization: Bearer test-token" \
+  -H "Content-Type: application/json" \
+  -d '{"filename":"data.json","content":"{}","directory":"reports/2025"}'
 ```
 
 ## Environment Configuration
@@ -63,6 +81,7 @@ The server supports environment-based configuration for complete isolation:
 - `OMNIDROP_ENV`: Environment mode (`production`, `development`, `test`)
 - `PORT`: Server port (8787=production, 8788-8799=test range)
 - `OMNIDROP_SCRIPT`: Explicit path to AppleScript file (overrides auto-detection)
+- `OMNIDROP_FILES_DIR`: Base directory for file operations (default: `~/.local/share/omnidrop/files`)
 
 ### Environment-Specific Script Resolution
 
@@ -81,7 +100,7 @@ legacy:       Fallback to installed or current directory
 
 ## API Contract
 
-**POST /tasks**
+### POST /tasks
 
 Request body:
 ```json
@@ -101,6 +120,32 @@ Response:
   "reason": "string (only on error)"
 }
 ```
+
+### POST /files
+
+Request body:
+```json
+{
+  "filename": "string (required) - name of the file to create",
+  "content": "string (required) - content to write to the file",
+  "directory": "string (optional) - subdirectory path within base directory"
+}
+```
+
+Response:
+```json
+{
+  "status": "ok|error",
+  "created": true|false,
+  "path": "string (relative path of created file, on success)",
+  "reason": "string (error message, only on error)"
+}
+```
+
+**Security Features:**
+- Path traversal protection prevents access outside base directory
+- Automatic directory creation for nested structures
+- File overwrite protection (returns error if file exists)
 
 ## Test Execution Environment
 

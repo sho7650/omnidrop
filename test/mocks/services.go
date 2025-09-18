@@ -45,9 +45,9 @@ func (m *MockHealthService) CheckAppleScriptHealth() services.HealthResult {
 	}
 	return services.HealthResult{
 		AppleScriptAccessible: true,
-		OmniFocusRunning:     true,
-		ScriptPath:           "/mock/path/omnidrop.applescript",
-		Details:             "Mock health check successful",
+		OmniFocusRunning:      true,
+		ScriptPath:            "/mock/path/omnidrop.applescript",
+		Details:               "Mock health check successful",
 	}
 }
 
@@ -56,4 +56,20 @@ func (m *MockHealthService) CheckOmniFocusStatus() bool {
 		return m.CheckOmniFocusStatusFunc()
 	}
 	return true
+}
+
+// MockFilesService provides a mock implementation for testing
+type MockFilesService struct {
+	WriteFileFunc func(ctx context.Context, req services.FileWriteRequest) services.FileWriteResponse
+}
+
+func (m *MockFilesService) WriteFile(ctx context.Context, req services.FileWriteRequest) services.FileWriteResponse {
+	if m.WriteFileFunc != nil {
+		return m.WriteFileFunc(ctx, req)
+	}
+	return services.FileWriteResponse{
+		Status:  "ok",
+		Created: true,
+		Path:    req.Filename,
+	}
 }

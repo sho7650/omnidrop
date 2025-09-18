@@ -45,6 +45,7 @@ func (s *Server) setupRouter() {
 
 	// Routes
 	r.Post("/tasks", s.handlers.CreateTask)
+	r.Post("/files", s.handlers.CreateFile)
 	r.Get("/health", s.handlers.Health)
 
 	s.router = r

@@ -9,7 +9,8 @@ import (
 	"omnidrop/internal/config"
 )
 
-// MockExecutorForTesting provides a simple mock for health service tests
+// MockExecutorForTesting is kept for backward compatibility
+// but TestAppleScriptExecutor should be used for new tests
 type MockExecutorForTesting struct {
 	executeFunc       func(ctx context.Context, script string, args ...string) ([]byte, error)
 	executeSimpleFunc func(ctx context.Context, script string) ([]byte, error)
@@ -196,10 +197,10 @@ func TestGetWorkingDirectory(t *testing.T) {
 func TestHealthResult_Structure(t *testing.T) {
 	result := HealthResult{
 		AppleScriptAccessible: true,
-		OmniFocusRunning:     false,
-		ScriptPath:           "/test/path",
-		Errors:              []string{"test error"},
-		Details:             "test details",
+		OmniFocusRunning:      false,
+		ScriptPath:            "/test/path",
+		Errors:                []string{"test error"},
+		Details:               "test details",
 	}
 
 	if !result.AppleScriptAccessible {
@@ -240,4 +241,120 @@ return "test"`
 
 func removeTempTestScript(path string) {
 	os.Remove(path)
+}
+
+// Tests using the new TestAppleScriptExecutor
+
+func TestHealthServiceImpl_CheckAppleScriptHealth_WithTestExecutor_Success(t *testing.T) {
+	// Create a temporary test script
+	testScript := "./temp_test_script.applescript"
+	err := createTempTestScript(testScript)
+	if err != nil {
+		t.Fatalf("Failed to create temp test script: %v", err)
+	}
+	defer removeTempTestScript(testScript)
+
+	cfg := &config.Config{
+		Token:           "test-token",
+		Port:            "8788",
+		Environment:     "test",
+		ScriptPath:      testScript,
+		AppleScriptFile: "temp_test_script.applescript",
+	}
+
+	// Use the new TestExecutor
+	testExecutor := NewTestExecutor()
+	service := NewHealthServiceWithExecutor(cfg, testExecutor)
+	result := service.CheckAppleScriptHealth()
+
+	if !result.AppleScriptAccessible {
+		t.Error("Expected AppleScript to be accessible with TestExecutor")
+	}
+
+	if !result.OmniFocusRunning {
+		t.Error("Expected OmniFocus to be running with default TestExecutor")
+	}
+
+	if len(result.Errors) > 0 {
+		t.Errorf("Expected no errors, but got: %v", result.Errors)
+	}
+
+	if result.ScriptPath != testScript {
+		t.Errorf("Expected script path %s, got %s", testScript, result.ScriptPath)
+	}
+}
+
+func TestHealthServiceImpl_CheckAppleScriptHealth_WithTestExecutor_OmniFocusNotRunning(t *testing.T) {
+	// Create a temporary test script
+	testScript := "./temp_test_script.applescript"
+	err := createTempTestScript(testScript)
+	if err != nil {
+		t.Fatalf("Failed to create temp test script: %v", err)
+	}
+	defer removeTempTestScript(testScript)
+
+	cfg := &config.Config{
+		Token:           "test-token",
+		Port:            "8788",
+		Environment:     "test",
+		ScriptPath:      testScript,
+		AppleScriptFile: "temp_test_script.applescript",
+	}
+
+	// Use TestExecutor that simulates OmniFocus not running
+	testExecutor := NewTestExecutorWithOmniFocusNotRunning()
+	service := NewHealthServiceWithExecutor(cfg, testExecutor)
+	result := service.CheckAppleScriptHealth()
+
+	if !result.AppleScriptAccessible {
+		t.Error("Expected AppleScript to be accessible")
+	}
+
+	if result.OmniFocusRunning {
+		t.Error("Expected OmniFocus to NOT be running with this TestExecutor")
+	}
+
+	if len(result.Errors) > 0 {
+		t.Errorf("Expected no errors, but got: %v", result.Errors)
+	}
+
+	expectedDetails := "AppleScript accessible but OmniFocus not running"
+	if result.Details != expectedDetails {
+		t.Errorf("Expected details '%s', got '%s'", expectedDetails, result.Details)
+	}
+}
+
+func TestHealthServiceImpl_CheckAppleScriptHealth_WithTestExecutor_ExecutionFailure(t *testing.T) {
+	// Create a temporary test script
+	testScript := "./temp_test_script.applescript"
+	err := createTempTestScript(testScript)
+	if err != nil {
+		t.Fatalf("Failed to create temp test script: %v", err)
+	}
+	defer removeTempTestScript(testScript)
+
+	cfg := &config.Config{
+		Token:           "test-token",
+		Port:            "8788",
+		Environment:     "test",
+		ScriptPath:      testScript,
+		AppleScriptFile: "temp_test_script.applescript",
+	}
+
+	// Use TestExecutor that simulates execution failure
+	testExecutor := NewTestExecutorWithFailure(nil, fmt.Errorf("AppleScript execution failed"))
+	service := NewHealthServiceWithExecutor(cfg, testExecutor)
+	result := service.CheckAppleScriptHealth()
+
+	if result.AppleScriptAccessible {
+		t.Error("Expected AppleScript to be inaccessible when execution fails")
+	}
+
+	if len(result.Errors) == 0 {
+		t.Error("Expected errors when AppleScript execution fails")
+	}
+
+	if result.Details == "" {
+		t.Error("Expected details to be set when execution fails")
+	}
 }
