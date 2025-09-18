@@ -1,0 +1,232 @@
+openapi: 3.0.3
+info:
+  title: OmniDrop API
+  description: |
+    REST API server that bridges external applications with OmniFocus on macOS.
+    Creates OmniFocus tasks programmatically through a simple HTTP API with
+    built-in authentication and environment separation.
+  version: 2.0.0
+  contact:
+    name: OmniDrop Support
+    url: https://github.com/sho7650/omnidrop
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8787
+    description: Production server
+  - url: http://localhost:8788
+    description: Development server
+  - url: http://localhost:8790
+    description: Staging server
+
+paths:
+  /tasks:
+    post:
+      summary: Create OmniFocus Task
+      description: |
+        Creates a new task in OmniFocus with specified properties.
+        Tasks are automatically assigned a due date of 23:59:59 today.
+        Supports hierarchical project assignment and automatic tag creation.
+      operationId: createTask
+      tags:
+        - Tasks
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskRequest'
+            examples:
+              simple:
+                summary: Simple task
+                value:
+                  title: "Review pull request"
+              withProject:
+                summary: Task with project
+                value:
+                  title: "Complete project documentation"
+                  note: "Update API docs and add examples"
+                  project: "Work"
+                  tags: ["urgent", "documentation"]
+              hierarchicalProject:
+                summary: Task with hierarchical project
+                value:
+                  title: "Complete project documentation"
+                  note: "Update API docs and add examples"
+                  project: "Getting Things Done/3. Projects/Work/Documentation"
+                  tags: ["urgent", "documentation", "new-auto-tag"]
+      responses:
+        '200':
+          description: Task created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                status: "ok"
+                created: true
+        '400':
+          description: Bad request - Invalid JSON or missing title
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                created: false
+                reason: "Title is required"
+        '401':
+          description: Unauthorized - Invalid or missing bearer token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                created: false
+                reason: "Unauthorized"
+        '500':
+          description: Internal server error - AppleScript execution failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: "error"
+                created: false
+                reason: "AppleScript error: Cannot find project"
+
+  /health:
+    get:
+      summary: Health Check
+      description: Returns server status and version information
+      operationId: healthCheck
+      tags:
+        - System
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "healthy"
+                version: "2.0.0"
+                environment: "production"
+                port: 8787
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Bearer token authentication required for all task operations
+
+  schemas:
+    TaskRequest:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          description: The task title (required)
+          minLength: 1
+          maxLength: 255
+          example: "Review pull request #42"
+        note:
+          type: string
+          description: Additional task notes or description
+          maxLength: 5000
+          example: "Update API documentation and add unit tests"
+        project:
+          type: string
+          description: |
+            Project name or hierarchical path.
+            Supports simple names (e.g., "Work") or paths
+            (e.g., "Getting Things Done/3. Projects/Work/Documentation")
+          maxLength: 500
+          example: "Work"
+        tags:
+          type: array
+          description: |
+            Array of tag names to apply to the task.
+            Non-existent tags are automatically created in OmniFocus.
+          items:
+            type: string
+            minLength: 1
+            maxLength: 50
+          maxItems: 20
+          example: ["urgent", "review", "documentation"]
+
+    SuccessResponse:
+      type: object
+      required:
+        - status
+        - created
+      properties:
+        status:
+          type: string
+          enum: ["ok"]
+          description: Success status indicator
+        created:
+          type: boolean
+          enum: [true]
+          description: Task creation confirmation
+
+    ErrorResponse:
+      type: object
+      required:
+        - status
+        - created
+        - reason
+      properties:
+        status:
+          type: string
+          enum: ["error"]
+          description: Error status indicator
+        created:
+          type: boolean
+          enum: [false]
+          description: Task creation failed
+        reason:
+          type: string
+          description: Human-readable error explanation
+          example: "AppleScript error: Project not found"
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: ["healthy", "degraded", "unhealthy"]
+          description: Server health status
+        version:
+          type: string
+          description: Application version
+          example: "2.0.0"
+        environment:
+          type: string
+          enum: ["production", "development", "test"]
+          description: Current environment mode
+        port:
+          type: integer
+          description: Server listening port
+          example: 8787
+        uptime:
+          type: integer
+          description: Server uptime in seconds
+          example: 3600
+
+tags:
+  - name: Tasks
+    description: Task creation and management operations
+  - name: System
+    description: System health and status operations

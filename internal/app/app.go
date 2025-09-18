@@ -69,9 +69,10 @@ func (a *Application) initialize() error {
 	// Initialize services
 	a.healthService = services.NewHealthService(cfg)
 	a.omniFocusService = services.NewOmniFocusService(cfg)
+	filesService := services.NewFilesService(cfg)
 
 	// Initialize handlers and server
-	h := handlers.New(cfg, a.omniFocusService)
+	h := handlers.New(cfg, a.omniFocusService, filesService)
 	a.server = server.NewServer(cfg, h)
 
 	return nil
