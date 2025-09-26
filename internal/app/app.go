@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -10,6 +10,7 @@ import (
 
 	"omnidrop/internal/config"
 	"omnidrop/internal/handlers"
+	"omnidrop/internal/observability"
 	"omnidrop/internal/server"
 	"omnidrop/internal/services"
 )
@@ -20,6 +21,7 @@ type Application struct {
 	healthService    services.HealthService
 	omniFocusService services.OmniFocusServiceInterface
 	server           *server.Server
+	logger           *slog.Logger
 	version          string
 	buildTime        string
 }
@@ -42,6 +44,9 @@ func NewWithVersion(version, buildTime string) *Application {
 
 // Run starts the application and handles the complete lifecycle
 func (a *Application) Run() error {
+	// Setup structured logging
+	a.logger = observability.SetupLogger()
+
 	// Initialize the application
 	if err := a.initialize(); err != nil {
 		return err
@@ -73,24 +78,30 @@ func (a *Application) initialize() error {
 
 	// Initialize handlers and server
 	h := handlers.New(cfg, a.omniFocusService, filesService)
-	a.server = server.NewServer(cfg, h)
+	a.server = server.NewServer(cfg, h, a.logger)
 
 	return nil
 }
 
 // displayStartupInfo shows application startup information
 func (a *Application) displayStartupInfo() {
-	log.Printf("🚀 OmniDrop Server %s (built at %s)", a.version, a.buildTime)
-	log.Printf("📡 Starting server on port %s", a.config.Port)
-	log.Printf("🔐 Authentication token configured: %t", a.config.Token != "")
-	log.Printf("📁 Working directory: %s", services.GetWorkingDirectory())
+	a.logger.Info("🚀 OmniDrop Server starting",
+		slog.String("version", a.version),
+		slog.String("build_time", a.buildTime),
+		slog.String("port", a.config.Port),
+		slog.Bool("auth_configured", a.config.Token != ""),
+		slog.String("working_dir", services.GetWorkingDirectory()),
+	)
 }
 
 // performHealthChecks runs system health checks
 func (a *Application) performHealthChecks() {
 	healthResult := a.healthService.CheckAppleScriptHealth()
 	if !healthResult.AppleScriptAccessible {
-		log.Printf("⚠️ AppleScript health check failed: %v", healthResult.Errors)
+		a.logger.Warn("⚠️ AppleScript health check failed",
+			slog.Any("errors", healthResult.Errors))
+	} else {
+		a.logger.Info("✅ AppleScript health check passed")
 	}
 }
 
@@ -118,7 +129,7 @@ func (a *Application) startAndWait() error {
 
 // shutdown gracefully shuts down the application
 func (a *Application) shutdown() error {
-	log.Println("🛑 Shutting down application...")
+	a.logger.Info("🛑 Shutting down application...")
 
 	// Create shutdown context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -126,11 +137,11 @@ func (a *Application) shutdown() error {
 
 	// Shutdown server
 	if err := a.server.Shutdown(ctx); err != nil {
-		log.Printf("Error during server shutdown: %v", err)
+		a.logger.Error("Error during server shutdown", slog.String("error", err.Error()))
 		return err
 	}
 
-	log.Println("✅ Application gracefully stopped")
+	a.logger.Info("✅ Application gracefully stopped")
 	return nil
 }
 

@@ -3,7 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os/exec"
 	"strings"
 
@@ -38,10 +38,12 @@ func (s *OmniFocusService) CreateTask(ctx context.Context, req TaskCreateRequest
 	tagsString := strings.Join(req.Tags, ",")
 
 	// Execute AppleScript with direct arguments
-	log.Printf("📝 Creating OmniFocus task: %s", req.Title)
-	log.Printf("🍎 Executing AppleScript: %s", scriptPath)
-	log.Printf("📋 Arguments: title='%s', note='%s', project='%s', tags='%s'",
-		req.Title, req.Note, req.Project, tagsString)
+	slog.Info("📝 Creating OmniFocus task",
+		slog.String("title", req.Title),
+		slog.String("script_path", scriptPath),
+		slog.String("note", req.Note),
+		slog.String("project", req.Project),
+		slog.String("tags", tagsString))
 
 	// Create command with context for timeout/cancellation
 	cmd := exec.CommandContext(ctx, "osascript", scriptPath, req.Title, req.Note, req.Project, tagsString)
@@ -49,8 +51,10 @@ func (s *OmniFocusService) CreateTask(ctx context.Context, req TaskCreateRequest
 
 	if err != nil {
 		wrappedErr := errors.Wrapf(err, "AppleScript execution failed for task '%s'", req.Title)
-		log.Printf("❌ AppleScript execution failed: %v", wrappedErr)
-		log.Printf("📄 AppleScript output: %s", string(output))
+		slog.Error("❌ AppleScript execution failed",
+			slog.String("task_title", req.Title),
+			slog.String("error", wrappedErr.Error()),
+			slog.String("output", string(output)))
 		return TaskCreateResponse{
 			Status: "error",
 			Reason: fmt.Sprintf("AppleScript execution failed: %v - Output: %s", wrappedErr, string(output)),
@@ -59,17 +63,19 @@ func (s *OmniFocusService) CreateTask(ctx context.Context, req TaskCreateRequest
 
 	// Parse AppleScript output
 	result := strings.TrimSpace(string(output))
-	log.Printf("📋 AppleScript result: %s", result)
+	slog.Info("📋 AppleScript result", slog.String("result", result))
 
 	if s.isSuccessResult(result) {
-		log.Printf("✅ Task created successfully: %s", req.Title)
+		slog.Info("✅ Task created successfully", slog.String("task_title", req.Title))
 		return TaskCreateResponse{
 			Status:  "ok",
 			Created: true,
 		}
 	}
 
-	log.Printf("❌ Task creation failed - AppleScript returned: %s", result)
+	slog.Error("❌ Task creation failed", 
+		slog.String("task_title", req.Title),
+		slog.String("applescript_result", result))
 	return TaskCreateResponse{
 		Status:  "error",
 		Created: false,
@@ -82,7 +88,7 @@ func (s *OmniFocusService) isSuccessResult(result string) bool {
 	successPatterns := []string{"true", "ok", "success", "created", "done"}
 
 	result = strings.TrimSpace(result)
-	log.Printf("🔍 Checking result: '%s' against success patterns", result)
+	slog.Debug("🔍 Checking result against success patterns", slog.String("result", result))
 
 	// Check if the last line matches any success pattern
 	lines := strings.Split(result, "\n")
@@ -90,7 +96,9 @@ func (s *OmniFocusService) isSuccessResult(result string) bool {
 
 	for _, pattern := range successPatterns {
 		if strings.ToLower(pattern) == lastLine {
-			log.Printf("✅ Match found: last line '%s' matches pattern '%s'", lastLine, pattern)
+			slog.Debug("✅ Match found: last line matches pattern",
+				slog.String("last_line", lastLine),
+				slog.String("pattern", pattern))
 			return true
 		}
 	}
@@ -99,11 +107,11 @@ func (s *OmniFocusService) isSuccessResult(result string) bool {
 	resultLower := strings.ToLower(result)
 	for _, pattern := range successPatterns {
 		if strings.Contains(resultLower, strings.ToLower(pattern)) {
-			log.Printf("✅ Match found: result contains pattern '%s'", pattern)
+			slog.Debug("✅ Match found: result contains pattern", slog.String("pattern", pattern))
 			return true
 		}
 	}
 
-	log.Printf("❌ No success pattern matched for result: '%s'", result)
+	slog.Debug("❌ No success pattern matched", slog.String("result", result))
 	return false
 }
