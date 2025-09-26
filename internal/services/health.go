@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
 	"omnidrop/internal/config"
 )
 
@@ -52,8 +53,8 @@ func NewHealthServiceWithExecutor(cfg *config.Config, executor AppleScriptExecut
 func (h *HealthServiceImpl) CheckAppleScriptHealth() HealthResult {
 	result := HealthResult{
 		AppleScriptAccessible: false,
-		OmniFocusRunning:     false,
-		Errors:              []string{},
+		OmniFocusRunning:      false,
+		Errors:                []string{},
 	}
 
 	log.Printf("🍎 Testing AppleScript access...")
@@ -61,9 +62,10 @@ func (h *HealthServiceImpl) CheckAppleScriptHealth() HealthResult {
 	// Check if AppleScript file exists and get its path
 	scriptPath, err := h.config.GetAppleScriptPath()
 	if err != nil {
-		result.Errors = append(result.Errors, fmt.Sprintf("AppleScript file not found: %v", err))
+		wrappedErr := errors.Wrap(err, "AppleScript path resolution failed")
+		result.Errors = append(result.Errors, fmt.Sprintf("AppleScript file not found: %v", wrappedErr))
 		result.Details = "AppleScript file not found in expected locations"
-		log.Printf("❌ AppleScript file not found: %v", err)
+		log.Printf("❌ AppleScript file not found: %v", wrappedErr)
 		return result
 	}
 
@@ -76,9 +78,10 @@ func (h *HealthServiceImpl) CheckAppleScriptHealth() HealthResult {
 
 	output, err := h.testBasicAppleScriptAccess(ctx)
 	if err != nil {
-		result.Errors = append(result.Errors, fmt.Sprintf("AppleScript test failed: %v", err))
+		wrappedErr := errors.Wrap(err, "AppleScript accessibility test failed")
+		result.Errors = append(result.Errors, fmt.Sprintf("AppleScript test failed: %v", wrappedErr))
 		result.Details = fmt.Sprintf("AppleScript execution failed: %s", string(output))
-		log.Printf("❌ AppleScript test failed: %v", err)
+		log.Printf("❌ AppleScript test failed: %v", wrappedErr)
 		return result
 	}
 
@@ -103,19 +106,30 @@ func (h *HealthServiceImpl) CheckOmniFocusStatus() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	executor, ok := h.executor.(*DefaultAppleScriptExecutor)
-	if !ok {
-		// For mock executors, we can't check OmniFocus status directly
-		return false
+	// Check if we have a default executor with ExecuteSimple method
+	if executor, ok := h.executor.(*DefaultAppleScriptExecutor); ok {
+		output, err := executor.ExecuteSimple(ctx, "tell application \"System Events\" to get name of processes")
+		if err != nil {
+			wrappedErr := errors.Wrap(err, "failed to query system processes")
+			log.Printf("❌ Failed to check running processes: %v", wrappedErr)
+			return false
+		}
+		return strings.Contains(string(output), "OmniFocus")
 	}
 
-	output, err := executor.ExecuteSimple(ctx, "tell application \"System Events\" to get name of processes")
-	if err != nil {
-		log.Printf("❌ Failed to check running processes: %v", err)
-		return false
+	// For TestExecutor and other mock executors, use ExecuteSimple if available
+	if testExecutor, ok := h.executor.(*TestAppleScriptExecutor); ok {
+		output, err := testExecutor.ExecuteSimple(ctx, "tell application \"System Events\" to get name of processes")
+		if err != nil {
+			wrappedErr := errors.Wrap(err, "test executor failed to query processes")
+			log.Printf("❌ Failed to check running processes: %v", wrappedErr)
+			return false
+		}
+		return strings.Contains(string(output), "OmniFocus")
 	}
 
-	return strings.Contains(string(output), "OmniFocus")
+	// For other mock executors, return false (backward compatibility)
+	return false
 }
 
 // testBasicAppleScriptAccess tests basic AppleScript functionality
@@ -123,6 +137,11 @@ func (h *HealthServiceImpl) testBasicAppleScriptAccess(ctx context.Context) ([]b
 	// Check if we have a default executor with ExecuteSimple method
 	if executor, ok := h.executor.(*DefaultAppleScriptExecutor); ok {
 		return executor.ExecuteSimple(ctx, "tell application \"System Events\" to get name of processes")
+	}
+
+	// For TestExecutor, use ExecuteSimple method
+	if testExecutor, ok := h.executor.(*TestAppleScriptExecutor); ok {
+		return testExecutor.ExecuteSimple(ctx, "tell application \"System Events\" to get name of processes")
 	}
 
 	// For other executor types (mocks), use the standard Execute method

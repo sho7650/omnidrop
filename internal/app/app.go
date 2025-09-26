@@ -16,12 +16,12 @@ import (
 
 // Application manages the complete application lifecycle
 type Application struct {
-	config        *config.Config
-	healthService services.HealthService
+	config           *config.Config
+	healthService    services.HealthService
 	omniFocusService services.OmniFocusServiceInterface
-	server        *server.Server
-	version       string
-	buildTime     string
+	server           *server.Server
+	version          string
+	buildTime        string
 }
 
 // New creates a new application instance
