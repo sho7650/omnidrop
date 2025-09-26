@@ -3,7 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
@@ -57,7 +57,7 @@ func (h *HealthServiceImpl) CheckAppleScriptHealth() HealthResult {
 		Errors:                []string{},
 	}
 
-	log.Printf("🍎 Testing AppleScript access...")
+	slog.Info("🍎 Testing AppleScript access...")
 
 	// Check if AppleScript file exists and get its path
 	scriptPath, err := h.config.GetAppleScriptPath()
@@ -65,12 +65,12 @@ func (h *HealthServiceImpl) CheckAppleScriptHealth() HealthResult {
 		wrappedErr := errors.Wrap(err, "AppleScript path resolution failed")
 		result.Errors = append(result.Errors, fmt.Sprintf("AppleScript file not found: %v", wrappedErr))
 		result.Details = "AppleScript file not found in expected locations"
-		log.Printf("❌ AppleScript file not found: %v", wrappedErr)
+		slog.Error("❌ AppleScript file not found", slog.String("error", wrappedErr.Error()))
 		return result
 	}
 
 	result.ScriptPath = scriptPath
-	log.Printf("✅ AppleScript found: %s", scriptPath)
+	slog.Info("✅ AppleScript found", slog.String("script_path", scriptPath))
 
 	// Test basic AppleScript execution
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -81,20 +81,20 @@ func (h *HealthServiceImpl) CheckAppleScriptHealth() HealthResult {
 		wrappedErr := errors.Wrap(err, "AppleScript accessibility test failed")
 		result.Errors = append(result.Errors, fmt.Sprintf("AppleScript test failed: %v", wrappedErr))
 		result.Details = fmt.Sprintf("AppleScript execution failed: %s", string(output))
-		log.Printf("❌ AppleScript test failed: %v", wrappedErr)
+		slog.Error("❌ AppleScript test failed", slog.String("error", wrappedErr.Error()))
 		return result
 	}
 
 	result.AppleScriptAccessible = true
-	log.Printf("✅ AppleScript accessibility confirmed")
+	slog.Info("✅ AppleScript accessibility confirmed")
 
 	// Check if OmniFocus is available
 	result.OmniFocusRunning = h.CheckOmniFocusStatus()
 	if result.OmniFocusRunning {
-		log.Printf("✅ OmniFocus detected in running processes")
+		slog.Info("✅ OmniFocus detected in running processes")
 		result.Details = "AppleScript and OmniFocus are both accessible"
 	} else {
-		log.Printf("⚠️ OmniFocus not currently running")
+		slog.Warn("⚠️ OmniFocus not currently running")
 		result.Details = "AppleScript accessible but OmniFocus not running"
 	}
 
@@ -111,7 +111,7 @@ func (h *HealthServiceImpl) CheckOmniFocusStatus() bool {
 		output, err := executor.ExecuteSimple(ctx, "tell application \"System Events\" to get name of processes")
 		if err != nil {
 			wrappedErr := errors.Wrap(err, "failed to query system processes")
-			log.Printf("❌ Failed to check running processes: %v", wrappedErr)
+			slog.Error("❌ Failed to check running processes", slog.String("error", wrappedErr.Error()))
 			return false
 		}
 		return strings.Contains(string(output), "OmniFocus")
@@ -122,7 +122,7 @@ func (h *HealthServiceImpl) CheckOmniFocusStatus() bool {
 		output, err := testExecutor.ExecuteSimple(ctx, "tell application \"System Events\" to get name of processes")
 		if err != nil {
 			wrappedErr := errors.Wrap(err, "test executor failed to query processes")
-			log.Printf("❌ Failed to check running processes: %v", wrappedErr)
+			slog.Error("❌ Failed to check running processes", slog.String("error", wrappedErr.Error()))
 			return false
 		}
 		return strings.Contains(string(output), "OmniFocus")

@@ -2,7 +2,7 @@ package server
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -11,21 +11,24 @@ import (
 
 	"omnidrop/internal/config"
 	"omnidrop/internal/handlers"
+	omnimiddleware "omnidrop/internal/middleware"
 )
 
 // Server manages the HTTP server lifecycle and configuration
 type Server struct {
 	config   *config.Config
 	handlers *handlers.Handlers
+	logger   *slog.Logger
 	httpSrv  *http.Server
 	router   chi.Router
 }
 
 // NewServer creates a new server instance with the given configuration and handlers
-func NewServer(cfg *config.Config, handlers *handlers.Handlers) *Server {
+func NewServer(cfg *config.Config, handlers *handlers.Handlers, logger *slog.Logger) *Server {
 	s := &Server{
 		config:   cfg,
 		handlers: handlers,
+		logger:   logger,
 	}
 	s.setupRouter()
 	s.setupHTTPServer()
@@ -36,10 +39,13 @@ func NewServer(cfg *config.Config, handlers *handlers.Handlers) *Server {
 func (s *Server) setupRouter() {
 	r := chi.NewRouter()
 
+	// Create logging configuration
+	loggingCfg := omnimiddleware.DefaultLoggingConfig(s.logger)
+
 	// Middleware stack
-	r.Use(middleware.RequestID)
+	r.Use(omnimiddleware.RequestIDMiddleware)
 	r.Use(middleware.RealIP)
-	r.Use(middleware.Logger)
+	r.Use(omnimiddleware.HTTPLogging(loggingCfg))
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 
@@ -65,7 +71,7 @@ func (s *Server) setupHTTPServer() {
 // Start begins serving HTTP requests
 // This method blocks until the server shuts down or encounters an error
 func (s *Server) Start() error {
-	log.Printf("🚀 Server starting on port %s", s.config.Port)
+	s.logger.Info("🚀 Server starting", slog.String("port", s.config.Port))
 	if err := s.httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		return err
 	}
@@ -74,14 +80,14 @@ func (s *Server) Start() error {
 
 // Shutdown gracefully shuts down the server without interrupting active connections
 func (s *Server) Shutdown(ctx context.Context) error {
-	log.Println("🛑 Shutting down server...")
+	s.logger.Info("🛑 Shutting down server...")
 
 	if err := s.httpSrv.Shutdown(ctx); err != nil {
-		log.Printf("Server forced to shutdown: %v", err)
+		s.logger.Error("Server forced to shutdown", slog.String("error", err.Error()))
 		return err
 	}
 
-	log.Println("✅ Server gracefully stopped")
+	s.logger.Info("✅ Server gracefully stopped")
 	return nil
 }
 
