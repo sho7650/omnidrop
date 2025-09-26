@@ -80,3 +80,4 @@ build/
 # .idea/
 # .vscode/
 .serena/
+.sfdx/

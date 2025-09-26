@@ -19,7 +19,8 @@ func TestNewServer(t *testing.T) {
 	}
 
 	mockOmniFocusService := &mocks.MockOmniFocusService{}
-	h := handlers.New(cfg, mockOmniFocusService)
+	mockFilesService := &mocks.MockFilesService{}
+	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
 
 	server := NewServer(cfg, h)
 
@@ -51,7 +52,8 @@ func TestServer_GetAddress(t *testing.T) {
 	}
 
 	mockOmniFocusService := &mocks.MockOmniFocusService{}
-	h := handlers.New(cfg, mockOmniFocusService)
+	mockFilesService := &mocks.MockFilesService{}
+	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
 	server := NewServer(cfg, h)
 
 	expectedAddr := ":8788"
@@ -69,7 +71,8 @@ func TestServer_GetRouter(t *testing.T) {
 	}
 
 	mockOmniFocusService := &mocks.MockOmniFocusService{}
-	h := handlers.New(cfg, mockOmniFocusService)
+	mockFilesService := &mocks.MockFilesService{}
+	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
 	server := NewServer(cfg, h)
 
 	router := server.GetRouter()
@@ -85,7 +88,8 @@ func TestServer_RouteConfiguration(t *testing.T) {
 	}
 
 	mockOmniFocusService := &mocks.MockOmniFocusService{}
-	h := handlers.New(cfg, mockOmniFocusService)
+	mockFilesService := &mocks.MockFilesService{}
+	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
 	server := NewServer(cfg, h)
 
 	router := server.GetRouter()
@@ -144,7 +148,8 @@ func TestServer_MiddlewareConfiguration(t *testing.T) {
 	}
 
 	mockOmniFocusService := &mocks.MockOmniFocusService{}
-	h := handlers.New(cfg, mockOmniFocusService)
+	mockFilesService := &mocks.MockFilesService{}
+	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
 	server := NewServer(cfg, h)
 
 	router := server.GetRouter()
@@ -175,7 +180,8 @@ func TestServer_HTTPServerConfiguration(t *testing.T) {
 	}
 
 	mockOmniFocusService := &mocks.MockOmniFocusService{}
-	h := handlers.New(cfg, mockOmniFocusService)
+	mockFilesService := &mocks.MockFilesService{}
+	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
 	server := NewServer(cfg, h)
 
 	// Check HTTP server configuration
@@ -207,7 +213,8 @@ func TestServer_Shutdown(t *testing.T) {
 	}
 
 	mockOmniFocusService := &mocks.MockOmniFocusService{}
-	h := handlers.New(cfg, mockOmniFocusService)
+	mockFilesService := &mocks.MockFilesService{}
+	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
 	server := NewServer(cfg, h)
 
 	// Test shutdown with context
@@ -228,7 +235,8 @@ func TestServer_Integration(t *testing.T) {
 	}
 
 	mockOmniFocusService := &mocks.MockOmniFocusService{}
-	h := handlers.New(cfg, mockOmniFocusService)
+	mockFilesService := &mocks.MockFilesService{}
+	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
 	server := NewServer(cfg, h)
 
 	// Test that the server can be used with httptest.Server

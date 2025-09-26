@@ -27,12 +27,14 @@ type TaskResponse struct {
 type Handlers struct {
 	cfg              *config.Config
 	omniFocusService services.OmniFocusServiceInterface
+	filesService     services.FilesServiceInterface
 }
 
-func New(cfg *config.Config, omniFocusService services.OmniFocusServiceInterface) *Handlers {
+func New(cfg *config.Config, omniFocusService services.OmniFocusServiceInterface, filesService services.FilesServiceInterface) *Handlers {
 	return &Handlers{
 		cfg:              cfg,
 		omniFocusService: omniFocusService,
+		filesService:     filesService,
 	}
 }
 
