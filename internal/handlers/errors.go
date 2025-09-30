@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/pkg/errors"
@@ -41,16 +41,24 @@ func writeErrorResponse(w http.ResponseWriter, statusCode int, errorCode ErrorCo
 	// Log the error with stack trace if available
 	if err != nil {
 		if stackErr, ok := err.(interface{ StackTrace() errors.StackTrace }); ok {
-			log.Printf("❌ Error [%s]: %s - %+v", errorCode, message, stackErr.StackTrace())
+			slog.Error("❌ Error occurred",
+				slog.String("code", string(errorCode)),
+				slog.String("message", message),
+				slog.Any("stack_trace", stackErr.StackTrace()))
 		} else {
-			log.Printf("❌ Error [%s]: %s - %v", errorCode, message, err)
+			slog.Error("❌ Error occurred",
+				slog.String("code", string(errorCode)),
+				slog.String("message", message),
+				slog.String("error", err.Error()))
 		}
 	} else {
-		log.Printf("❌ Error [%s]: %s", errorCode, message)
+		slog.Error("❌ Error occurred",
+			slog.String("code", string(errorCode)),
+			slog.String("message", message))
 	}
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("❌ Failed to encode error response: %v", err)
+		slog.Error("❌ Failed to encode error response", slog.String("error", err.Error()))
 	}
 }
 
