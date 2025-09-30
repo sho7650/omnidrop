@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"omnidrop/internal/config"
 	"omnidrop/internal/handlers"
@@ -46,6 +47,7 @@ func (s *Server) setupRouter() {
 	r.Use(omnimiddleware.RequestIDMiddleware)
 	r.Use(middleware.RealIP)
 	r.Use(omnimiddleware.HTTPLogging(loggingCfg))
+	r.Use(omnimiddleware.Metrics) // Prometheus metrics collection
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 
@@ -53,6 +55,7 @@ func (s *Server) setupRouter() {
 	r.Post("/tasks", s.handlers.CreateTask)
 	r.Post("/files", s.handlers.CreateFile)
 	r.Get("/health", s.handlers.Health)
+	r.Handle("/metrics", promhttp.Handler()) // Prometheus metrics endpoint
 
 	s.router = r
 }
