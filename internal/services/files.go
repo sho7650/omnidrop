@@ -6,8 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"omnidrop/internal/config"
+	"omnidrop/internal/observability"
 )
 
 // FilesService handles file operations with security validation
@@ -27,8 +29,12 @@ func NewFilesService(cfg *config.Config) *FilesService {
 
 // WriteFile writes content to a file with security validation
 func (s *FilesService) WriteFile(ctx context.Context, req FileWriteRequest) FileWriteResponse {
+	// Start timing for metrics
+	start := time.Now()
+	
 	// Validate required fields
 	if req.Filename == "" {
+		observability.FileCreationsTotal.WithLabelValues("failure").Inc()
 		return FileWriteResponse{
 			Status: "error",
 			Reason: "filename is required and cannot be empty",
@@ -38,6 +44,8 @@ func (s *FilesService) WriteFile(ctx context.Context, req FileWriteRequest) File
 	// Build and validate file path
 	safePath, relativePath, err := s.validateAndBuildPath(req.Filename, req.Directory)
 	if err != nil {
+		observability.FileCreationsTotal.WithLabelValues("failure").Inc()
+		observability.FileCreationDuration.Observe(time.Since(start).Seconds())
 		return FileWriteResponse{
 			Status: "error",
 			Reason: err.Error(),
@@ -46,6 +54,8 @@ func (s *FilesService) WriteFile(ctx context.Context, req FileWriteRequest) File
 
 	// Check if file already exists
 	if _, err := os.Stat(safePath); err == nil {
+		observability.FileCreationsTotal.WithLabelValues("failure").Inc()
+		observability.FileCreationDuration.Observe(time.Since(start).Seconds())
 		return FileWriteResponse{
 			Status: "error",
 			Reason: "file already exists",
@@ -55,6 +65,8 @@ func (s *FilesService) WriteFile(ctx context.Context, req FileWriteRequest) File
 	// Create directory if it doesn't exist
 	dir := filepath.Dir(safePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
+		observability.FileCreationsTotal.WithLabelValues("failure").Inc()
+		observability.FileCreationDuration.Observe(time.Since(start).Seconds())
 		return FileWriteResponse{
 			Status: "error",
 			Reason: fmt.Sprintf("failed to create directory: %v", err),
@@ -62,12 +74,20 @@ func (s *FilesService) WriteFile(ctx context.Context, req FileWriteRequest) File
 	}
 
 	// Write file with appropriate permissions
-	if err := os.WriteFile(safePath, []byte(req.Content), 0644); err != nil {
+	contentBytes := []byte(req.Content)
+	if err := os.WriteFile(safePath, contentBytes, 0644); err != nil {
+		observability.FileCreationsTotal.WithLabelValues("failure").Inc()
+		observability.FileCreationDuration.Observe(time.Since(start).Seconds())
 		return FileWriteResponse{
 			Status: "error",
 			Reason: fmt.Sprintf("failed to write file: %v", err),
 		}
 	}
+
+	// Record successful metrics
+	observability.FileCreationsTotal.WithLabelValues("success").Inc()
+	observability.FileCreationDuration.Observe(time.Since(start).Seconds())
+	observability.FilesSizeBytes.Observe(float64(len(contentBytes)))
 
 	return FileWriteResponse{
 		Status:  "ok",
