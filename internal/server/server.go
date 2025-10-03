@@ -43,13 +43,13 @@ func (s *Server) setupRouter() {
 	// Create logging configuration
 	loggingCfg := omnimiddleware.DefaultLoggingConfig(s.logger)
 
-	// Middleware stack
-	r.Use(omnimiddleware.RequestIDMiddleware)
-	r.Use(middleware.RealIP)
-	r.Use(omnimiddleware.HTTPLogging(loggingCfg))
-	r.Use(omnimiddleware.Metrics) // Prometheus metrics collection
-	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(60 * time.Second))
+	// Middleware stack (order matters!)
+	r.Use(omnimiddleware.Recovery)              // Panic recovery (first for safety)
+	r.Use(omnimiddleware.RequestIDMiddleware)   // Request ID generation
+	r.Use(middleware.RealIP)                    // Real IP detection
+	r.Use(omnimiddleware.HTTPLogging(loggingCfg)) // Structured logging
+	r.Use(omnimiddleware.Metrics)               // Prometheus metrics collection
+	r.Use(middleware.Timeout(60 * time.Second)) // Request timeout
 
 	// Routes
 	r.Post("/tasks", s.handlers.CreateTask)
