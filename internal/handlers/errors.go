@@ -5,7 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/pkg/errors"
+	"omnidrop/internal/errors"
+	pkgerrors "github.com/pkg/errors"
 )
 
 // ErrorResponse represents a standardized error response
@@ -38,9 +39,12 @@ func writeErrorResponse(w http.ResponseWriter, statusCode int, errorCode ErrorCo
 		Code:    string(errorCode),
 	}
 
-	// Log the error with stack trace if available
-	if err != nil {
-		if stackErr, ok := err.(interface{ StackTrace() errors.StackTrace }); ok {
+	// Log the error using slog.LogValuer if it's a DomainError
+	if domainErr, ok := err.(*errors.DomainError); ok {
+		slog.Error("❌ Error occurred", slog.Any("error", domainErr))
+	} else if err != nil {
+		// Fallback for non-domain errors
+		if stackErr, ok := err.(interface{ StackTrace() pkgerrors.StackTrace }); ok {
 			slog.Error("❌ Error occurred",
 				slog.String("code", string(errorCode)),
 				slog.String("message", message),
