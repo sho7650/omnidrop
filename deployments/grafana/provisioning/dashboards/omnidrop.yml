@@ -1,0 +1,16 @@
+# Grafana Dashboard Provisioning
+# This file tells Grafana where to find dashboard JSON files
+
+apiVersion: 1
+
+providers:
+  - name: 'OmniDrop Dashboards'
+    orgId: 1
+    folder: 'OmniDrop'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: true

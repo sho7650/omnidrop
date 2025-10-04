@@ -1,0 +1,92 @@
+version: '3.8'
+
+# Docker Compose configuration for OmniDrop monitoring stack
+# This sets up Prometheus and Grafana for local development and testing
+
+services:
+  # Prometheus - Metrics collection and storage
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: omnidrop-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      # Mount configuration
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Optional: Mount alert rules
+      # - ./prometheus/alerts:/etc/prometheus/alerts:ro
+      # Persistent storage for metrics data
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--storage.tsdb.retention.size=10GB'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - omnidrop-monitoring
+    # Use host network mode to access localhost services
+    # Uncomment if omnidrop-server is running on host
+    # network_mode: host
+
+  # Grafana - Metrics visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: omnidrop-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Security: Change default admin password
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      # Server configuration
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      # Anonymous access (optional, useful for development)
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      # Install plugins (optional)
+      # - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      # Persistent storage for dashboards and config
+      - grafana-data:/var/lib/grafana
+      # Provisioning: Auto-configure datasources
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      # Provisioning: Auto-import dashboards
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - omnidrop-monitoring
+    depends_on:
+      - prometheus
+
+  # Node Exporter - System metrics (optional)
+  # Uncomment to collect host system metrics
+  # node-exporter:
+  #   image: prom/node-exporter:latest
+  #   container_name: omnidrop-node-exporter
+  #   restart: unless-stopped
+  #   ports:
+  #     - "9100:9100"
+  #   command:
+  #     - '--path.procfs=/host/proc'
+  #     - '--path.sysfs=/host/sys'
+  #     - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+  #   volumes:
+  #     - /proc:/host/proc:ro
+  #     - /sys:/host/sys:ro
+  #     - /:/rootfs:ro
+  #   networks:
+  #     - omnidrop-monitoring
+
+networks:
+  omnidrop-monitoring:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local

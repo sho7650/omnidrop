@@ -1,0 +1,117 @@
+# Prometheus Configuration for OmniDrop
+# Documentation: https://prometheus.io/docs/prometheus/latest/configuration/configuration/
+
+global:
+  # How frequently to scrape targets by default
+  scrape_interval: 15s
+  
+  # How long until a scrape request times out
+  scrape_timeout: 10s
+  
+  # How frequently to evaluate rules
+  evaluation_interval: 15s
+  
+  # Attach these labels to any time series or alerts when communicating with
+  # external systems (federation, remote storage, Alertmanager)
+  external_labels:
+    cluster: 'omnidrop-local'
+    environment: 'development'
+
+# Alertmanager configuration (optional - uncomment if using Alertmanager)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           - localhost:9093
+
+# Load rules once and periodically evaluate them
+# rule_files:
+#   - "alerts/*.yml"
+#   - "recording_rules/*.yml"
+
+# Scrape configuration
+scrape_configs:
+  # OmniDrop API Server
+  - job_name: 'omnidrop'
+    
+    # Override global scrape interval for this job
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    
+    # Metrics path defaults to '/metrics'
+    metrics_path: /metrics
+    
+    # Scheme defaults to 'http'
+    scheme: http
+    
+    # Static configuration for local development
+    static_configs:
+      - targets: 
+          - 'localhost:8787'  # Production instance
+        labels:
+          instance: 'omnidrop-production'
+          service: 'omnidrop-api'
+      
+      # Development/test instances (uncomment as needed)
+      # - targets:
+      #     - 'localhost:8788'
+      #   labels:
+      #     instance: 'omnidrop-dev'
+      #     service: 'omnidrop-api'
+    
+    # Optional: Authentication (uncomment if metrics endpoint requires auth)
+    # bearer_token: 'your-prometheus-scrape-token'
+    # Or use bearer_token_file for better security:
+    # bearer_token_file: /etc/prometheus/token
+    
+    # Optional: TLS configuration (uncomment if using HTTPS)
+    # tls_config:
+    #   insecure_skip_verify: false
+    #   ca_file: /etc/prometheus/certs/ca.crt
+    #   cert_file: /etc/prometheus/certs/client.crt
+    #   key_file: /etc/prometheus/certs/client.key
+    
+    # Relabeling configuration
+    # relabel_configs:
+    #   - source_labels: [__address__]
+    #     target_label: __param_target
+    #   - source_labels: [__param_target]
+    #     target_label: instance
+    
+    # Metric relabeling (applied after scraping)
+    metric_relabel_configs:
+      # Drop high-cardinality debug metrics if needed
+      - source_labels: [__name__]
+        regex: 'go_memstats_.*'
+        action: drop
+      
+      # Rename endpoint label to route for consistency
+      - source_labels: [endpoint]
+        target_label: route
+        action: replace
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    scrape_interval: 15s
+    static_configs:
+      - targets: 
+          - 'localhost:9090'
+        labels:
+          service: 'prometheus'
+
+  # Node Exporter for system metrics (optional - uncomment if installed)
+  # - job_name: 'node'
+  #   scrape_interval: 30s
+  #   static_configs:
+  #     - targets:
+  #         - 'localhost:9100'
+  #       labels:
+  #         service: 'node-exporter'
+
+# Storage configuration
+# storage:
+#   tsdb:
+#     path: /prometheus/data
+#     retention:
+#       time: 15d
+#       size: 10GB
