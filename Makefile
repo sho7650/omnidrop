@@ -59,7 +59,7 @@ dev:
 	fi
 	$(GOCMD) run $(CMD_DIR)/main.go
 
-## install: Install the application and LaunchAgent with proper service lifecycle
+## install: Install the application and LaunchAgent (use FORCE_PLIST=1 to update existing plist)
 install: build
 	@echo "Installing $(BINARY_NAME) with proper service lifecycle..."
 
@@ -86,28 +86,47 @@ install: build
 	cp $(APPLESCRIPT_FILE) $(SCRIPT_DIR)/
 	chmod 644 $(SCRIPT_DIR)/$(APPLESCRIPT_FILE)
 
-	@# Install LaunchAgent plist with TOKEN replacement
+	@# Install LaunchAgent plist with smart update protection
 	@echo "Installing LaunchAgent..."
-	@if [ -f .env ]; then \
-		TOKEN_VALUE=$$(grep '^TOKEN=' .env | cut -d'=' -f2- | sed 's/^"\(.*\)"$$/\1/'); \
-		if [ -n "$$TOKEN_VALUE" ]; then \
-			echo "Using TOKEN from .env file"; \
-			sed -e 's/{{TOKEN}}/'"$$TOKEN_VALUE"'/g' -e 's|{{HOME}}|$(HOME)|g' $(PLIST_TEMPLATE) > /tmp/omnidrop-plist.$$$$; \
-			cp /tmp/omnidrop-plist.$$$$ $(LAUNCHD_DIR)/$(LAUNCHD_PLIST); \
-			rm -f /tmp/omnidrop-plist.$$$$; \
+	@if [ -f $(LAUNCHD_DIR)/$(LAUNCHD_PLIST) ] && [ -z "$(FORCE_PLIST)" ]; then \
+		echo "⚠️  Existing plist found - SKIPPING to preserve custom settings"; \
+		echo "   Location: $(LAUNCHD_DIR)/$(LAUNCHD_PLIST)"; \
+		echo ""; \
+		echo "   To create backup manually:"; \
+		echo "   cp $(LAUNCHD_DIR)/$(LAUNCHD_PLIST) $(LAUNCHD_DIR)/$(LAUNCHD_PLIST).backup"; \
+		echo ""; \
+		echo "   To force update (will create automatic backup):"; \
+		echo "   make install FORCE_PLIST=1"; \
+	else \
+		if [ -f $(LAUNCHD_DIR)/$(LAUNCHD_PLIST) ]; then \
+			BACKUP_FILE=$(LAUNCHD_DIR)/$(LAUNCHD_PLIST).backup.$$(date +%Y%m%d_%H%M%S); \
+			echo "💾 Backing up existing plist..."; \
+			cp $(LAUNCHD_DIR)/$(LAUNCHD_PLIST) $$BACKUP_FILE; \
+			echo "   Backup saved: $$BACKUP_FILE"; \
+		fi; \
+		echo "📝 Installing new plist..."; \
+		if [ -f .env ]; then \
+			TOKEN_VALUE=$$(grep '^TOKEN=' .env | cut -d'=' -f2- | sed 's/^"\(.*\)"$$/\1/'); \
+			if [ -n "$$TOKEN_VALUE" ]; then \
+				echo "   Using TOKEN from .env file"; \
+				sed -e 's/{{TOKEN}}/'"$$TOKEN_VALUE"'/g' -e 's|{{HOME}}|$(HOME)|g' $(PLIST_TEMPLATE) > /tmp/omnidrop-plist.$$$$; \
+				cp /tmp/omnidrop-plist.$$$$ $(LAUNCHD_DIR)/$(LAUNCHD_PLIST); \
+				rm -f /tmp/omnidrop-plist.$$$$; \
+			else \
+				echo "   Warning: TOKEN not found in .env file, using template as-is"; \
+				sed 's|{{HOME}}|$(HOME)|g' $(PLIST_TEMPLATE) > /tmp/omnidrop-plist.$$$$; \
+				cp /tmp/omnidrop-plist.$$$$ $(LAUNCHD_DIR)/$(LAUNCHD_PLIST); \
+				rm -f /tmp/omnidrop-plist.$$$$; \
+			fi; \
 		else \
-			echo "Warning: TOKEN not found in .env file, using template as-is"; \
+			echo "   Warning: .env file not found, using template as-is"; \
 			sed 's|{{HOME}}|$(HOME)|g' $(PLIST_TEMPLATE) > /tmp/omnidrop-plist.$$$$; \
 			cp /tmp/omnidrop-plist.$$$$ $(LAUNCHD_DIR)/$(LAUNCHD_PLIST); \
 			rm -f /tmp/omnidrop-plist.$$$$; \
 		fi; \
-	else \
-		echo "Warning: .env file not found, using template as-is"; \
-		sed 's|{{HOME}}|$(HOME)|g' $(PLIST_TEMPLATE) > /tmp/omnidrop-plist.$$$$; \
-		cp /tmp/omnidrop-plist.$$$$ $(LAUNCHD_DIR)/$(LAUNCHD_PLIST); \
-		rm -f /tmp/omnidrop-plist.$$$$; \
+		chmod 644 $(LAUNCHD_DIR)/$(LAUNCHD_PLIST); \
+		echo "   ✅ Plist installed successfully"; \
 	fi
-	chmod 644 $(LAUNCHD_DIR)/$(LAUNCHD_PLIST)
 
 	@# Phase 4: Load with persistence and auto-start
 	@echo "🚀 Loading and starting service..."

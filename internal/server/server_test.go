@@ -9,6 +9,7 @@ import (
 
 	"omnidrop/internal/config"
 	"omnidrop/internal/handlers"
+	"omnidrop/internal/observability"
 	"omnidrop/test/mocks"
 )
 
@@ -21,8 +22,8 @@ func TestNewServer(t *testing.T) {
 	mockOmniFocusService := &mocks.MockOmniFocusService{}
 	mockFilesService := &mocks.MockFilesService{}
 	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
-
-	server := NewServer(cfg, h)
+	logger := observability.SetupLogger()
+	server := NewServer(cfg, h, logger)
 
 	if server == nil {
 		t.Fatal("NewServer returned nil")
@@ -54,7 +55,8 @@ func TestServer_GetAddress(t *testing.T) {
 	mockOmniFocusService := &mocks.MockOmniFocusService{}
 	mockFilesService := &mocks.MockFilesService{}
 	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
-	server := NewServer(cfg, h)
+	logger := observability.SetupLogger()
+	server := NewServer(cfg, h, logger)
 
 	expectedAddr := ":8788"
 	actualAddr := server.GetAddress()
@@ -73,7 +75,8 @@ func TestServer_GetRouter(t *testing.T) {
 	mockOmniFocusService := &mocks.MockOmniFocusService{}
 	mockFilesService := &mocks.MockFilesService{}
 	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
-	server := NewServer(cfg, h)
+	logger := observability.SetupLogger()
+	server := NewServer(cfg, h, logger)
 
 	router := server.GetRouter()
 	if router == nil {
@@ -90,7 +93,8 @@ func TestServer_RouteConfiguration(t *testing.T) {
 	mockOmniFocusService := &mocks.MockOmniFocusService{}
 	mockFilesService := &mocks.MockFilesService{}
 	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
-	server := NewServer(cfg, h)
+	logger := observability.SetupLogger()
+	server := NewServer(cfg, h, logger)
 
 	router := server.GetRouter()
 
@@ -150,7 +154,8 @@ func TestServer_MiddlewareConfiguration(t *testing.T) {
 	mockOmniFocusService := &mocks.MockOmniFocusService{}
 	mockFilesService := &mocks.MockFilesService{}
 	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
-	server := NewServer(cfg, h)
+	logger := observability.SetupLogger()
+	server := NewServer(cfg, h, logger)
 
 	router := server.GetRouter()
 
@@ -182,7 +187,8 @@ func TestServer_HTTPServerConfiguration(t *testing.T) {
 	mockOmniFocusService := &mocks.MockOmniFocusService{}
 	mockFilesService := &mocks.MockFilesService{}
 	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
-	server := NewServer(cfg, h)
+	logger := observability.SetupLogger()
+	server := NewServer(cfg, h, logger)
 
 	// Check HTTP server configuration
 	if server.httpSrv.Addr != ":8788" {
@@ -215,7 +221,8 @@ func TestServer_Shutdown(t *testing.T) {
 	mockOmniFocusService := &mocks.MockOmniFocusService{}
 	mockFilesService := &mocks.MockFilesService{}
 	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
-	server := NewServer(cfg, h)
+	logger := observability.SetupLogger()
+	server := NewServer(cfg, h, logger)
 
 	// Test shutdown with context
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -237,7 +244,8 @@ func TestServer_Integration(t *testing.T) {
 	mockOmniFocusService := &mocks.MockOmniFocusService{}
 	mockFilesService := &mocks.MockFilesService{}
 	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
-	server := NewServer(cfg, h)
+	logger := observability.SetupLogger()
+	server := NewServer(cfg, h, logger)
 
 	// Test that the server can be used with httptest.Server
 	testServer := httptest.NewServer(server.GetRouter())

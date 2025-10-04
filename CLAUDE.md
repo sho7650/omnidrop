@@ -35,6 +35,12 @@ The system consists of three main components:
 # Build the server
 go build -o omnidrop-server .
 
+# Install to system (LaunchAgent)
+make install
+
+# Install with plist update (creates timestamped backup)
+make install FORCE_PLIST=1
+
 # Run the server (requires TOKEN environment variable)
 TOKEN="your-secret-token" ./omnidrop-server
 
@@ -243,6 +249,36 @@ Projects can be referenced using paths (e.g., "Getting Things Done/3. Projects/ã
    - `PORT` should be 8788-8799 range
    - `OMNIDROP_SCRIPT` should point to development AppleScript
 
+### Installation and Updates
+
+**Initial Installation:**
+```bash
+# First-time installation
+make install
+```
+
+**Updating Without Plist Changes:**
+```bash
+# Updates binary and AppleScript, preserves existing plist configuration
+make install
+```
+
+**Updating With Plist Changes:**
+```bash
+# Force plist update (creates timestamped backup automatically)
+make install FORCE_PLIST=1
+```
+
+**Plist Update Behavior:**
+- **Default (`make install`)**: Skips plist if it already exists, preserving custom settings
+- **Force mode (`FORCE_PLIST=1`)**: Updates plist with automatic backup to `~/Library/LaunchAgents/com.oshiire.omnidrop.plist.backup.YYYYMMDD_HHMMSS`
+- **New installation**: Always creates plist from template
+
+**Manual Plist Backup:**
+```bash
+cp ~/Library/LaunchAgents/com.oshiire.omnidrop.plist ~/Library/LaunchAgents/com.oshiire.omnidrop.plist.backup
+```
+
 ### Troubleshooting
 
 **If tags are not being assigned:**
@@ -254,3 +290,8 @@ Projects can be referenced using paths (e.g., "Getting Things Done/3. Projects/ã
 1. Run `make test-preflight` to check environment safety
 2. Verify no production processes are running on port 8787
 3. Check that OmniFocus is accessible for AppleScript execution
+
+**If `make install` reports plist is skipped:**
+1. This is normal behavior to protect your custom settings
+2. To update plist with new TOKEN or settings: `make install FORCE_PLIST=1`
+3. Check backup files: `ls -la ~/Library/LaunchAgents/com.oshiire.omnidrop.plist.backup.*`

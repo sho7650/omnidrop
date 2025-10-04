@@ -1,20 +1,29 @@
 # OmniDrop
 
-A lightweight REST API server that bridges external applications with OmniFocus on macOS. Create OmniFocus tasks programmatically through a simple HTTP API with built-in service management, environment separation, and comprehensive testing infrastructure.
+A lightweight REST API server that bridges external applications with both OmniFocus and local file systems on macOS. Create OmniFocus tasks and manage files programmatically through a simple HTTP API with built-in observability, service management, and comprehensive testing infrastructure.
 
 ## Features
 
-- 🚀 Simple REST API for task creation
+### Core Functionality
+- 🚀 **Dual-purpose REST API** - Task creation + File operations
 - 🔐 Bearer token authentication for security
-- 📝 Support for task notes, projects, and tags
+- 📝 OmniFocus task creation with notes, projects, and tags
+- 📂 **Secure file operations** with path traversal protection
 - 🏗️ **Hierarchical project support** with path-based project references
 - 🏷️ **Automatic tag creation** - creates new tags in OmniFocus if they don't exist
 - ⏰ Automatic due date setting (end of current day)
+
+### Integration & Operations
 - 🍎 Native OmniFocus 4 integration via enhanced AppleScript
+- 📊 **Prometheus metrics** for HTTP, OmniFocus, and file operations
+- 📝 **Structured logging** with request IDs and JSON output
 - 🔧 **Environment-based configuration** with complete isolation (production/development/test)
 - 🛠️ **Comprehensive build system** with Makefile and testing infrastructure
+
+### Service Management
 - 🔄 **Reliable LaunchAgent lifecycle management** with graceful shutdown
-- 📋 **Idempotent installation** with proper service management
+- 📋 **Smart plist updates** - preserves custom settings by default
+- 💾 **Automatic backup** with timestamped plist backups (FORCE_PLIST=1)
 - 🧪 **Complete testing suite** with isolated environments and production protection
 - 📊 **Multi-environment support** with port validation and script isolation
 
@@ -60,20 +69,33 @@ cp .env.example .env
 
 # Install everything with proper service lifecycle
 make install
+
+# Update installation (preserves existing plist)
+make install
+
+# Force plist update (creates automatic backup)
+make install FORCE_PLIST=1
 ```
 
-The new install process:
+The install process:
 1. **🛑 Stops** existing service gracefully
 2. **📤 Unloads** service completely to prevent conflicts
 3. **📁 Installs** files (binary, script, plist)
-4. **🚀 Loads** with persistence (`-w` flag) for reliable startup
-5. **✅ Verifies** service startup with user feedback
+4. **💾 Protects** existing plist configuration (unless FORCE_PLIST=1)
+5. **🚀 Loads** with persistence (`-w` flag) for reliable startup
+6. **✅ Verifies** service startup with user feedback
 
 This installs:
 - Binary: `~/bin/omnidrop-server` (with graceful shutdown support)
 - AppleScript: `~/.local/share/omnidrop/omnidrop.applescript`
 - LaunchAgent: `~/Library/LaunchAgents/com.oshiire.omnidrop.plist`
 - Logs: `~/.local/log/omnidrop/`
+- Files: `~/.local/share/omnidrop/files/` (configurable via OMNIDROP_FILES_DIR)
+
+**Plist Update Behavior:**
+- **Default (`make install`)**: Preserves existing plist to protect custom settings
+- **Force (`FORCE_PLIST=1`)**: Updates plist with automatic timestamped backup
+- **New installation**: Always creates plist from template
 
 ### Development Installation
 
@@ -111,6 +133,7 @@ OmniDrop supports complete environment separation for safe development and testi
 - `OMNIDROP_ENV`: Environment mode (`production`, `development`, `test`)
 - `PORT`: Server port (8787=production, 8788-8799=test range)
 - `OMNIDROP_SCRIPT`: Explicit path to AppleScript file (overrides auto-detection)
+- `OMNIDROP_FILES_DIR`: Base directory for file operations (default: `~/.local/share/omnidrop/files`)
 
 ### Environment-Specific Configuration
 
@@ -358,11 +381,63 @@ Error (4xx/5xx):
 }
 ```
 
+### Create File
+
+**Endpoint:** `POST /files`
+
+**Headers:**
+- `Authorization: Bearer <your-token>` (required)
+- `Content-Type: application/json` (required)
+
+**Request Body:**
+```json
+{
+  "filename": "report.txt",                 // Required: Name of the file to create
+  "content": "File content here",           // Required: Content to write to the file
+  "directory": "reports/2025"               // Optional: Subdirectory path within base directory
+}
+```
+
+**Security Features:**
+- Path traversal protection prevents access outside base directory (`~/.local/share/omnidrop/files/` by default)
+- Automatic directory creation for nested structures
+- File overwrite protection (returns error if file exists)
+- Configurable base directory via `OMNIDROP_FILES_DIR` environment variable
+
+**Response:**
+
+Success (200 OK):
+```json
+{
+  "status": "ok",
+  "created": true,
+  "path": "reports/2025/report.txt"
+}
+```
+
+Error (4xx/5xx):
+```json
+{
+  "status": "error",
+  "created": false,
+  "reason": "Error description"
+}
+```
+
 ### Health Check
 
 **Endpoint:** `GET /health`
 
 Returns server status and version information.
+
+### Metrics
+
+**Endpoint:** `GET /metrics`
+
+Exposes Prometheus-compatible metrics (no authentication required):
+- HTTP request metrics (rate, duration, size)
+- OmniFocus operation metrics (success/failure, duration)
+- File operation metrics (success/failure, duration)
 
 ### Example Requests
 
@@ -397,6 +472,41 @@ curl -X POST http://localhost:8788/tasks \
     "project": "Test Project",
     "tags": ["test", "development"]
   }'
+```
+
+#### Create File
+```bash
+curl -X POST http://localhost:8787/files \
+  -H "Authorization: Bearer your-secret-token" \
+  -H "Content-Type: application/json" \
+  -d '{"filename":"report.txt","content":"Monthly report content"}'
+```
+
+#### Create File with Directory
+```bash
+curl -X POST http://localhost:8787/files \
+  -H "Authorization: Bearer your-secret-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "filename": "data.json",
+    "content": "{\"status\":\"complete\"}",
+    "directory": "reports/2025"
+  }'
+```
+
+#### View Metrics
+```bash
+# View all metrics
+curl http://localhost:8787/metrics
+
+# Filter HTTP metrics
+curl -s http://localhost:8787/metrics | grep "omnidrop_http"
+
+# Filter OmniFocus metrics
+curl -s http://localhost:8787/metrics | grep "omnidrop_omnifocus"
+
+# Filter file operation metrics
+curl -s http://localhost:8787/metrics | grep "omnidrop_files"
 ```
 
 ## Project Structure
@@ -588,6 +698,8 @@ grep -i "tag\|project\|error" ~/.local/log/omnidrop/stdout.log
 - **File Permissions**: Ensure proper permissions on `.env` and log files
 - **Service Security**: LaunchAgent runs as user, not root (safer)
 - **Port Protection**: Production port 8787 is protected from accidental test usage
+- **File Operations**: Path traversal protection prevents access outside configured base directory
+- **Metrics Endpoint**: `/metrics` endpoint is public - use firewall rules if external access is restricted
 
 ## Uninstalling
 
@@ -623,18 +735,28 @@ MIT License - see the [LICENSE](LICENSE) file for details
 
 Built with:
 - [Go](https://golang.org/) - The programming language
+- [go-chi](https://github.com/go-chi/chi) - Lightweight HTTP router
 - [godotenv](https://github.com/joho/godotenv) - Environment variable management
+- [Prometheus client](https://github.com/prometheus/client_golang) - Metrics collection
+- [slog-http](https://github.com/samber/slog-http) - Structured logging middleware
 - [OmniFocus](https://www.omnigroup.com/omnifocus) - Task management application
 
 ## Recent Improvements
 
-**v2.0 - Enhanced Environment Management & Reliability:**
+**v2.1 - Observability & File Operations (2025-01):**
+- 📂 **File operations endpoint** with secure path handling and automatic directory creation
+- 📊 **Prometheus metrics** for HTTP, OmniFocus, and file operations monitoring
+- 📝 **Structured logging** with request IDs and JSON output for better observability
+- 💾 **Smart plist updates** - preserves custom settings with FORCE_PLIST option
+- 🔒 **Enhanced security** with file path traversal protection
+
+**v2.0 - Environment Management & Reliability (2024-12):**
 - ✨ **Hierarchical project support** with folder path navigation
 - 🏷️ **Automatic tag creation** with multi-strategy assignment
 - 🔧 **Complete environment separation** (production/development/test)
 - 🛠️ **Proper LaunchAgent lifecycle management** with graceful shutdown
-- 📋 **Idempotent installation** process
+- 📋 **Idempotent installation** process with configuration protection
 - 🧪 **Comprehensive testing infrastructure** with production protection
 - 🔄 **Reliable service management** with startup verification
 
-These improvements provide enterprise-grade reliability with complete environment isolation and robust service management.
+These improvements provide enterprise-grade reliability with complete environment isolation, robust service management, and comprehensive observability for production deployments.
