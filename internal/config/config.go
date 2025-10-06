@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -22,6 +23,12 @@ type Config struct {
 
 	// Files configuration
 	FilesDir string // Base directory for file operations
+
+	// OAuth configuration
+	JWTSecret         string
+	TokenExpiry       time.Duration
+	OAuthClientsFile  string
+	LegacyAuthEnabled bool
 }
 
 func Load() (*Config, error) {
@@ -29,12 +36,16 @@ func Load() (*Config, error) {
 	loadEnvFile()
 
 	cfg := &Config{
-		Port:            getEnvWithDefault("PORT", "8787"),
-		Token:           os.Getenv("TOKEN"),
-		Environment:     getEnvWithDefault("OMNIDROP_ENV", ""),
-		ScriptPath:      os.Getenv("OMNIDROP_SCRIPT"),
-		AppleScriptFile: "omnidrop.applescript",
-		FilesDir:        getFilesDir(),
+		Port:              getEnvWithDefault("PORT", "8787"),
+		Token:             os.Getenv("TOKEN"),
+		Environment:       getEnvWithDefault("OMNIDROP_ENV", ""),
+		ScriptPath:        os.Getenv("OMNIDROP_SCRIPT"),
+		AppleScriptFile:   "omnidrop.applescript",
+		FilesDir:          getFilesDir(),
+		JWTSecret:         os.Getenv("OMNIDROP_JWT_SECRET"),
+		TokenExpiry:       getTokenExpiry(),
+		OAuthClientsFile:  getOAuthClientsFile(),
+		LegacyAuthEnabled: getEnvWithDefault("OMNIDROP_LEGACY_AUTH_ENABLED", "false") == "true",
 	}
 
 	// Validate required configuration
@@ -182,4 +193,27 @@ func getFilesDir() string {
 	}
 
 	return fmt.Sprintf("%s/.local/share/omnidrop/files", homeDir)
+}
+
+func getTokenExpiry() time.Duration {
+	expiryStr := getEnvWithDefault("OMNIDROP_TOKEN_EXPIRY", "24h")
+	expiry, err := time.ParseDuration(expiryStr)
+	if err != nil {
+		return 24 * time.Hour // Default to 24 hours
+	}
+	return expiry
+}
+
+func getOAuthClientsFile() string {
+	if file := os.Getenv("OMNIDROP_OAUTH_CLIENTS_FILE"); file != "" {
+		return file
+	}
+
+	// Default location
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "./oauth-clients.yaml" // Fallback to relative path
+	}
+
+	return fmt.Sprintf("%s/.local/share/omnidrop/oauth-clients.yaml", homeDir)
 }

@@ -1,0 +1,49 @@
+clients:
+  # Example client for n8n workflow automation
+  - client_id: "n8n-workflow"
+    # Generate hash with: echo -n "your-secret-here" | bcrypt-cli
+    # Or use the CLI tool: omnidrop-cli client create n8n-workflow
+    client_secret_hash: "$2a$10$example.hash.replace.with.real.bcrypt.hash"
+    name: "n8n Workflow Automation"
+    scopes:
+      - "tasks:write"
+      - "files:write"
+    created_at: 2025-01-01T00:00:00Z
+    disabled: false
+
+  # Example client for Defy automation
+  - client_id: "defy-automation"
+    client_secret_hash: "$2a$10$example.hash.replace.with.real.bcrypt.hash"
+    name: "Defy Automation System"
+    scopes:
+      - "automation:*"  # Wildcard: allows all automation scopes
+      - "tasks:write"
+    created_at: 2025-01-01T00:00:00Z
+    disabled: false
+
+  # Example admin client with full access
+  - client_id: "admin-client"
+    client_secret_hash: "$2a$10$example.hash.replace.with.real.bcrypt.hash"
+    name: "Admin Client"
+    scopes:
+      - "*"  # Admin wildcard: allows all scopes
+    created_at: 2025-01-01T00:00:00Z
+    disabled: false
+
+  # Example disabled client
+  - client_id: "legacy-client"
+    client_secret_hash: "$2a$10$example.hash.replace.with.real.bcrypt.hash"
+    name: "Legacy Client (Disabled)"
+    scopes:
+      - "tasks:write"
+    created_at: 2024-01-01T00:00:00Z
+    disabled: true
+
+# Scope format: resource:action
+# Examples:
+#   - tasks:write     - Create tasks in OmniFocus
+#   - tasks:read      - Read task information
+#   - files:write     - Create files on filesystem
+#   - files:read      - Read file information
+#   - automation:*    - All automation scopes (wildcard)
+#   - *               - All scopes (admin wildcard)
