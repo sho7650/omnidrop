@@ -53,6 +53,7 @@ func TestApplication_Initialize(t *testing.T) {
 	}()
 
 	app := New()
+	app.logger = observability.SetupLogger() // Setup logger before initialize
 	err := app.initialize()
 
 	if err != nil {
@@ -87,6 +88,7 @@ func TestApplication_Initialize_ConfigError(t *testing.T) {
 	}()
 
 	app := New()
+	app.logger = observability.SetupLogger() // Setup logger before initialize
 	err := app.initialize()
 
 	if err == nil {
@@ -106,6 +108,7 @@ func TestApplication_GetMethods(t *testing.T) {
 	}()
 
 	app := New()
+	app.logger = observability.SetupLogger() // Setup logger before initialize
 	err := app.initialize()
 	if err != nil {
 		t.Fatalf("initialize() failed: %v", err)
@@ -141,9 +144,7 @@ func TestApplication_DisplayStartupInfo(t *testing.T) {
 	}()
 
 	app := NewWithVersion("1.0.0", "2025-09-15")
-
-	// Setup logger (required for displayStartupInfo)
-	app.logger = observability.SetupLogger()
+	app.logger = observability.SetupLogger() // Setup logger before initialize
 
 	err := app.initialize()
 	if err != nil {
@@ -166,9 +167,7 @@ func TestApplication_PerformHealthChecks(t *testing.T) {
 	}()
 
 	app := New()
-
-	// Setup logger (required for performHealthChecks)
-	app.logger = observability.SetupLogger()
+	app.logger = observability.SetupLogger() // Setup logger before initialize
 
 	err := app.initialize()
 	if err != nil {
@@ -191,9 +190,7 @@ func TestApplication_Shutdown(t *testing.T) {
 	}()
 
 	app := New()
-
-	// Setup logger (required for shutdown)
-	app.logger = observability.SetupLogger()
+	app.logger = observability.SetupLogger() // Setup logger before initialize
 
 	err := app.initialize()
 	if err != nil {
@@ -220,9 +217,7 @@ func TestApplication_Lifecycle(t *testing.T) {
 	}()
 
 	app := New()
-
-	// Setup logger (required for displayStartupInfo, performHealthChecks)
-	app.logger = observability.SetupLogger()
+	app.logger = observability.SetupLogger() // Setup logger before initialize
 
 	// Test initialization
 	err := app.initialize()
