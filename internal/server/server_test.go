@@ -23,7 +23,7 @@ func TestNewServer(t *testing.T) {
 	mockFilesService := &mocks.MockFilesService{}
 	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
 	logger := observability.SetupLogger()
-	server := NewServer(cfg, h, logger)
+	server := NewServer(cfg, h, nil, nil, logger) // No OAuth middleware for basic test
 
 	if server == nil {
 		t.Fatal("NewServer returned nil")
@@ -56,7 +56,7 @@ func TestServer_GetAddress(t *testing.T) {
 	mockFilesService := &mocks.MockFilesService{}
 	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
 	logger := observability.SetupLogger()
-	server := NewServer(cfg, h, logger)
+	server := NewServer(cfg, h, nil, nil, logger) // No OAuth middleware for basic test
 
 	expectedAddr := ":8788"
 	actualAddr := server.GetAddress()
@@ -76,7 +76,7 @@ func TestServer_GetRouter(t *testing.T) {
 	mockFilesService := &mocks.MockFilesService{}
 	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
 	logger := observability.SetupLogger()
-	server := NewServer(cfg, h, logger)
+	server := NewServer(cfg, h, nil, nil, logger) // No OAuth middleware for basic test
 
 	router := server.GetRouter()
 	if router == nil {
@@ -94,7 +94,7 @@ func TestServer_RouteConfiguration(t *testing.T) {
 	mockFilesService := &mocks.MockFilesService{}
 	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
 	logger := observability.SetupLogger()
-	server := NewServer(cfg, h, logger)
+	server := NewServer(cfg, h, nil, nil, logger) // No OAuth middleware for basic test
 
 	router := server.GetRouter()
 
@@ -155,7 +155,7 @@ func TestServer_MiddlewareConfiguration(t *testing.T) {
 	mockFilesService := &mocks.MockFilesService{}
 	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
 	logger := observability.SetupLogger()
-	server := NewServer(cfg, h, logger)
+	server := NewServer(cfg, h, nil, nil, logger) // No OAuth middleware for basic test
 
 	router := server.GetRouter()
 
@@ -188,7 +188,7 @@ func TestServer_HTTPServerConfiguration(t *testing.T) {
 	mockFilesService := &mocks.MockFilesService{}
 	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
 	logger := observability.SetupLogger()
-	server := NewServer(cfg, h, logger)
+	server := NewServer(cfg, h, nil, nil, logger) // No OAuth middleware for basic test
 
 	// Check HTTP server configuration
 	if server.httpSrv.Addr != ":8788" {
@@ -222,7 +222,7 @@ func TestServer_Shutdown(t *testing.T) {
 	mockFilesService := &mocks.MockFilesService{}
 	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
 	logger := observability.SetupLogger()
-	server := NewServer(cfg, h, logger)
+	server := NewServer(cfg, h, nil, nil, logger) // No OAuth middleware for basic test
 
 	// Test shutdown with context
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -245,7 +245,7 @@ func TestServer_Integration(t *testing.T) {
 	mockFilesService := &mocks.MockFilesService{}
 	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
 	logger := observability.SetupLogger()
-	server := NewServer(cfg, h, logger)
+	server := NewServer(cfg, h, nil, nil, logger) // No OAuth middleware for basic test
 
 	// Test that the server can be used with httptest.Server
 	testServer := httptest.NewServer(server.GetRouter())
