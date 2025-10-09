@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -8,6 +9,9 @@ import (
 
 	"github.com/joho/godotenv"
 )
+
+// ErrNoAuthConfigured is returned when no authentication method is configured
+var ErrNoAuthConfigured = errors.New("no authentication method configured: either TOKEN (with OMNIDROP_LEGACY_AUTH_ENABLED=true) or OMNIDROP_JWT_SECRET must be set")
 
 type Config struct {
 	// Server configuration

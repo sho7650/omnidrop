@@ -11,6 +11,7 @@ import (
 	"omnidrop/internal/auth"
 	"omnidrop/internal/config"
 	"omnidrop/internal/handlers"
+	"omnidrop/internal/middleware"
 	"omnidrop/internal/observability"
 	"omnidrop/internal/server"
 	"omnidrop/internal/services"
@@ -76,6 +77,7 @@ func (a *Application) initialize() error {
 	var oauthRepo *auth.Repository
 	var jwtManager *auth.JWTManager
 	var authMiddleware *auth.Middleware
+	var legacyAuthMiddleware *middleware.LegacyAuthMiddleware
 	var tokenHandler *auth.TokenHandler
 
 	if cfg.JWTSecret != "" {
@@ -100,8 +102,18 @@ func (a *Application) initialize() error {
 				slog.Duration("token_expiry", cfg.TokenExpiry),
 				slog.Bool("legacy_auth_enabled", cfg.LegacyAuthEnabled))
 		}
-	} else {
-		a.logger.Warn("⚠️ OAuth not configured - using legacy authentication only")
+	}
+
+	// Initialize legacy authentication if enabled
+	if cfg.LegacyAuthEnabled && cfg.Token != "" {
+		legacyAuthMiddleware = middleware.NewLegacyAuthMiddleware(cfg.Token, a.logger)
+		a.logger.Info("✅ Legacy authentication initialized (migration mode)")
+	}
+
+	// Ensure at least one authentication method is configured
+	if authMiddleware == nil && legacyAuthMiddleware == nil {
+		a.logger.Error("FATAL: No authentication configured")
+		return config.ErrNoAuthConfigured
 	}
 
 	// Initialize services
@@ -111,7 +123,7 @@ func (a *Application) initialize() error {
 
 	// Initialize handlers and server
 	h := handlers.New(cfg, a.omniFocusService, filesService)
-	a.server = server.NewServer(cfg, h, authMiddleware, tokenHandler, a.logger)
+	a.server = server.NewServer(cfg, h, authMiddleware, legacyAuthMiddleware, tokenHandler, a.logger)
 
 	return nil
 }

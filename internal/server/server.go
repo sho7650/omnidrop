@@ -18,23 +18,25 @@ import (
 
 // Server manages the HTTP server lifecycle and configuration
 type Server struct {
-	config         *config.Config
-	handlers       *handlers.Handlers
-	authMiddleware *auth.Middleware
-	tokenHandler   *auth.TokenHandler
-	logger         *slog.Logger
-	httpSrv        *http.Server
-	router         chi.Router
+	config               *config.Config
+	handlers             *handlers.Handlers
+	authMiddleware       *auth.Middleware
+	legacyAuthMiddleware *omnimiddleware.LegacyAuthMiddleware
+	tokenHandler         *auth.TokenHandler
+	logger               *slog.Logger
+	httpSrv              *http.Server
+	router               chi.Router
 }
 
 // NewServer creates a new server instance with the given configuration and handlers
-func NewServer(cfg *config.Config, handlers *handlers.Handlers, authMiddleware *auth.Middleware, tokenHandler *auth.TokenHandler, logger *slog.Logger) *Server {
+func NewServer(cfg *config.Config, handlers *handlers.Handlers, authMiddleware *auth.Middleware, legacyAuthMiddleware *omnimiddleware.LegacyAuthMiddleware, tokenHandler *auth.TokenHandler, logger *slog.Logger) *Server {
 	s := &Server{
-		config:         cfg,
-		handlers:       handlers,
-		authMiddleware: authMiddleware,
-		tokenHandler:   tokenHandler,
-		logger:         logger,
+		config:               cfg,
+		handlers:             handlers,
+		authMiddleware:       authMiddleware,
+		legacyAuthMiddleware: legacyAuthMiddleware,
+		tokenHandler:         tokenHandler,
+		logger:               logger,
 	}
 	s.setupRouter()
 	s.setupHTTPServer()
@@ -67,7 +69,8 @@ func (s *Server) setupRouter() {
 
 	// Protected routes (authentication required)
 	if s.authMiddleware != nil {
-		// Use OAuth authentication
+		// OAuth authentication mode
+		s.logger.Info("Authentication: OAuth 2.0 with JWT tokens")
 		r.Group(func(r chi.Router) {
 			r.Use(s.authMiddleware.Authenticate)
 
@@ -77,11 +80,17 @@ func (s *Server) setupRouter() {
 			// File creation requires files:write scope
 			r.With(auth.RequireScopes("files:write")).Post("/files", s.handlers.CreateFile)
 		})
+	} else if s.legacyAuthMiddleware != nil {
+		// Legacy authentication mode (TOKEN-based)
+		s.logger.Warn("⚠️ Authentication: Legacy token-based (migration mode)")
+		r.Group(func(r chi.Router) {
+			r.Use(s.legacyAuthMiddleware.Authenticate)
+			r.Post("/tasks", s.handlers.CreateTask)
+			r.Post("/files", s.handlers.CreateFile)
+		})
 	} else {
-		// Fallback to legacy authentication (for backward compatibility)
-		s.logger.Warn("⚠️ Using legacy authentication - OAuth is not configured")
-		r.Post("/tasks", s.handlers.CreateTask)
-		r.Post("/files", s.handlers.CreateFile)
+		// No authentication configured - this should never happen in production
+		panic("FATAL: No authentication middleware configured - server cannot start safely")
 	}
 
 	s.router = r
