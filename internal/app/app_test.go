@@ -46,10 +46,12 @@ func TestApplication_Initialize(t *testing.T) {
 	os.Setenv("TOKEN", "test-token")
 	os.Setenv("PORT", "8788")
 	os.Setenv("OMNIDROP_ENV", "test")
+	os.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 	defer func() {
 		os.Unsetenv("TOKEN")
 		os.Unsetenv("PORT")
 		os.Unsetenv("OMNIDROP_ENV")
+		os.Unsetenv("OMNIDROP_LEGACY_AUTH_ENABLED")
 	}()
 
 	app := New()
@@ -79,12 +81,15 @@ func TestApplication_Initialize(t *testing.T) {
 
 func TestApplication_Initialize_ConfigError(t *testing.T) {
 	// Clear TOKEN environment variable to trigger config error
+	// Enable legacy auth to make TOKEN required
 	originalToken := os.Getenv("TOKEN")
+	os.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 	os.Unsetenv("TOKEN")
 	defer func() {
 		if originalToken != "" {
 			os.Setenv("TOKEN", originalToken)
 		}
+		os.Unsetenv("OMNIDROP_LEGACY_AUTH_ENABLED")
 	}()
 
 	app := New()
@@ -92,7 +97,7 @@ func TestApplication_Initialize_ConfigError(t *testing.T) {
 	err := app.initialize()
 
 	if err == nil {
-		t.Error("Expected initialize() to fail when TOKEN is not set")
+		t.Error("Expected initialize() to fail when TOKEN is not set and legacy auth is enabled")
 	}
 }
 
@@ -101,10 +106,12 @@ func TestApplication_GetMethods(t *testing.T) {
 	os.Setenv("TOKEN", "test-token")
 	os.Setenv("PORT", "8788")
 	os.Setenv("OMNIDROP_ENV", "test")
+	os.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 	defer func() {
 		os.Unsetenv("TOKEN")
 		os.Unsetenv("PORT")
 		os.Unsetenv("OMNIDROP_ENV")
+		os.Unsetenv("OMNIDROP_LEGACY_AUTH_ENABLED")
 	}()
 
 	app := New()
@@ -137,10 +144,12 @@ func TestApplication_DisplayStartupInfo(t *testing.T) {
 	os.Setenv("TOKEN", "test-token")
 	os.Setenv("PORT", "8788")
 	os.Setenv("OMNIDROP_ENV", "test")
+	os.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 	defer func() {
 		os.Unsetenv("TOKEN")
 		os.Unsetenv("PORT")
 		os.Unsetenv("OMNIDROP_ENV")
+		os.Unsetenv("OMNIDROP_LEGACY_AUTH_ENABLED")
 	}()
 
 	app := NewWithVersion("1.0.0", "2025-09-15")
@@ -160,10 +169,12 @@ func TestApplication_PerformHealthChecks(t *testing.T) {
 	os.Setenv("TOKEN", "test-token")
 	os.Setenv("PORT", "8788")
 	os.Setenv("OMNIDROP_ENV", "test")
+	os.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 	defer func() {
 		os.Unsetenv("TOKEN")
 		os.Unsetenv("PORT")
 		os.Unsetenv("OMNIDROP_ENV")
+		os.Unsetenv("OMNIDROP_LEGACY_AUTH_ENABLED")
 	}()
 
 	app := New()
@@ -183,10 +194,12 @@ func TestApplication_Shutdown(t *testing.T) {
 	os.Setenv("TOKEN", "test-token")
 	os.Setenv("PORT", "8788")
 	os.Setenv("OMNIDROP_ENV", "test")
+	os.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 	defer func() {
 		os.Unsetenv("TOKEN")
 		os.Unsetenv("PORT")
 		os.Unsetenv("OMNIDROP_ENV")
+		os.Unsetenv("OMNIDROP_LEGACY_AUTH_ENABLED")
 	}()
 
 	app := New()
@@ -210,10 +223,12 @@ func TestApplication_Lifecycle(t *testing.T) {
 	os.Setenv("TOKEN", "test-token")
 	os.Setenv("PORT", "8788")
 	os.Setenv("OMNIDROP_ENV", "test")
+	os.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 	defer func() {
 		os.Unsetenv("TOKEN")
 		os.Unsetenv("PORT")
 		os.Unsetenv("OMNIDROP_ENV")
+		os.Unsetenv("OMNIDROP_LEGACY_AUTH_ENABLED")
 	}()
 
 	app := New()
@@ -249,10 +264,12 @@ func TestApplication_RunBasicFlow(t *testing.T) {
 	os.Setenv("TOKEN", "test-token")
 	os.Setenv("PORT", "8789") // Use different port to avoid conflicts
 	os.Setenv("OMNIDROP_ENV", "test")
+	os.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 	defer func() {
 		os.Unsetenv("TOKEN")
 		os.Unsetenv("PORT")
 		os.Unsetenv("OMNIDROP_ENV")
+		os.Unsetenv("OMNIDROP_LEGACY_AUTH_ENABLED")
 	}()
 
 	app := New()

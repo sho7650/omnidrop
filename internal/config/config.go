@@ -57,8 +57,23 @@ func Load() (*Config, error) {
 }
 
 func (c *Config) validate() error {
-	if c.Token == "" {
-		return fmt.Errorf("TOKEN environment variable is required")
+	// Validate authentication configuration based on mode
+	if c.LegacyAuthEnabled {
+		// Legacy authentication mode requires TOKEN
+		if c.Token == "" {
+			return fmt.Errorf("TOKEN environment variable is required when OMNIDROP_LEGACY_AUTH_ENABLED=true")
+		}
+	}
+
+	// If OAuth is configured (JWT secret provided), validate it
+	if c.JWTSecret != "" {
+		// JWT secret should be at least 32 characters for security
+		if len(c.JWTSecret) < 32 {
+			return fmt.Errorf("OMNIDROP_JWT_SECRET must be at least 32 characters for security")
+		}
+	} else if !c.LegacyAuthEnabled {
+		// If legacy auth is disabled and no JWT secret, we have no authentication method
+		return fmt.Errorf("OMNIDROP_JWT_SECRET is required when OAuth is enabled (OMNIDROP_LEGACY_AUTH_ENABLED=false)")
 	}
 
 	// Validate environment-specific rules

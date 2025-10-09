@@ -35,11 +35,7 @@ func (h *Handlers) CreateFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Authentication check
-	if !h.authenticateRequest(r) {
-		writeAuthenticationError(w, "Invalid or missing authentication token")
-		return
-	}
+	// Authentication is handled by middleware - no need to re-authenticate here
 
 	// Parse request body
 	var fileReq FileRequest
