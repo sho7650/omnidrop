@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"omnidrop/internal/auth"
 	"omnidrop/internal/config"
 	"omnidrop/internal/handlers"
 	omnimiddleware "omnidrop/internal/middleware"
@@ -17,19 +18,25 @@ import (
 
 // Server manages the HTTP server lifecycle and configuration
 type Server struct {
-	config   *config.Config
-	handlers *handlers.Handlers
-	logger   *slog.Logger
-	httpSrv  *http.Server
-	router   chi.Router
+	config               *config.Config
+	handlers             *handlers.Handlers
+	authMiddleware       *auth.Middleware
+	legacyAuthMiddleware *omnimiddleware.LegacyAuthMiddleware
+	tokenHandler         *auth.TokenHandler
+	logger               *slog.Logger
+	httpSrv              *http.Server
+	router               chi.Router
 }
 
 // NewServer creates a new server instance with the given configuration and handlers
-func NewServer(cfg *config.Config, handlers *handlers.Handlers, logger *slog.Logger) *Server {
+func NewServer(cfg *config.Config, handlers *handlers.Handlers, authMiddleware *auth.Middleware, legacyAuthMiddleware *omnimiddleware.LegacyAuthMiddleware, tokenHandler *auth.TokenHandler, logger *slog.Logger) *Server {
 	s := &Server{
-		config:   cfg,
-		handlers: handlers,
-		logger:   logger,
+		config:               cfg,
+		handlers:             handlers,
+		authMiddleware:       authMiddleware,
+		legacyAuthMiddleware: legacyAuthMiddleware,
+		tokenHandler:         tokenHandler,
+		logger:               logger,
 	}
 	s.setupRouter()
 	s.setupHTTPServer()
@@ -51,11 +58,40 @@ func (s *Server) setupRouter() {
 	r.Use(omnimiddleware.Metrics)               // Prometheus metrics collection
 	r.Use(middleware.Timeout(60 * time.Second)) // Request timeout
 
-	// Routes
-	r.Post("/tasks", s.handlers.CreateTask)
-	r.Post("/files", s.handlers.CreateFile)
+	// Public routes (no authentication required)
 	r.Get("/health", s.handlers.Health)
 	r.Handle("/metrics", promhttp.Handler()) // Prometheus metrics endpoint
+
+	// OAuth token endpoint
+	if s.tokenHandler != nil {
+		r.Post("/oauth/token", s.tokenHandler.HandleToken)
+	}
+
+	// Protected routes (authentication required)
+	if s.authMiddleware != nil {
+		// OAuth authentication mode
+		s.logger.Info("Authentication: OAuth 2.0 with JWT tokens")
+		r.Group(func(r chi.Router) {
+			r.Use(s.authMiddleware.Authenticate)
+
+			// Task creation requires tasks:write scope
+			r.With(auth.RequireScopes("tasks:write")).Post("/tasks", s.handlers.CreateTask)
+
+			// File creation requires files:write scope
+			r.With(auth.RequireScopes("files:write")).Post("/files", s.handlers.CreateFile)
+		})
+	} else if s.legacyAuthMiddleware != nil {
+		// Legacy authentication mode (TOKEN-based)
+		s.logger.Warn("⚠️ Authentication: Legacy token-based (migration mode)")
+		r.Group(func(r chi.Router) {
+			r.Use(s.legacyAuthMiddleware.Authenticate)
+			r.Post("/tasks", s.handlers.CreateTask)
+			r.Post("/files", s.handlers.CreateFile)
+		})
+	} else {
+		// No authentication configured - this should never happen in production
+		panic("FATAL: No authentication middleware configured - server cannot start safely")
+	}
 
 	s.router = r
 }

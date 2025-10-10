@@ -1,12 +1,17 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/joho/godotenv"
 )
+
+// ErrNoAuthConfigured is returned when no authentication method is configured
+var ErrNoAuthConfigured = errors.New("no authentication method configured: either TOKEN (with OMNIDROP_LEGACY_AUTH_ENABLED=true) or OMNIDROP_JWT_SECRET must be set")
 
 type Config struct {
 	// Server configuration
@@ -22,6 +27,12 @@ type Config struct {
 
 	// Files configuration
 	FilesDir string // Base directory for file operations
+
+	// OAuth configuration
+	JWTSecret         string
+	TokenExpiry       time.Duration
+	OAuthClientsFile  string
+	LegacyAuthEnabled bool
 }
 
 func Load() (*Config, error) {
@@ -29,12 +40,16 @@ func Load() (*Config, error) {
 	loadEnvFile()
 
 	cfg := &Config{
-		Port:            getEnvWithDefault("PORT", "8787"),
-		Token:           os.Getenv("TOKEN"),
-		Environment:     getEnvWithDefault("OMNIDROP_ENV", ""),
-		ScriptPath:      os.Getenv("OMNIDROP_SCRIPT"),
-		AppleScriptFile: "omnidrop.applescript",
-		FilesDir:        getFilesDir(),
+		Port:              getEnvWithDefault("PORT", "8787"),
+		Token:             os.Getenv("TOKEN"),
+		Environment:       getEnvWithDefault("OMNIDROP_ENV", ""),
+		ScriptPath:        os.Getenv("OMNIDROP_SCRIPT"),
+		AppleScriptFile:   "omnidrop.applescript",
+		FilesDir:          getFilesDir(),
+		JWTSecret:         os.Getenv("OMNIDROP_JWT_SECRET"),
+		TokenExpiry:       getTokenExpiry(),
+		OAuthClientsFile:  getOAuthClientsFile(),
+		LegacyAuthEnabled: getEnvWithDefault("OMNIDROP_LEGACY_AUTH_ENABLED", "false") == "true",
 	}
 
 	// Validate required configuration
@@ -46,8 +61,23 @@ func Load() (*Config, error) {
 }
 
 func (c *Config) validate() error {
-	if c.Token == "" {
-		return fmt.Errorf("TOKEN environment variable is required")
+	// Validate authentication configuration based on mode
+	if c.LegacyAuthEnabled {
+		// Legacy authentication mode requires TOKEN
+		if c.Token == "" {
+			return fmt.Errorf("TOKEN environment variable is required when OMNIDROP_LEGACY_AUTH_ENABLED=true")
+		}
+	}
+
+	// If OAuth is configured (JWT secret provided), validate it
+	if c.JWTSecret != "" {
+		// JWT secret should be at least 32 characters for security
+		if len(c.JWTSecret) < 32 {
+			return fmt.Errorf("OMNIDROP_JWT_SECRET must be at least 32 characters for security")
+		}
+	} else if !c.LegacyAuthEnabled {
+		// If legacy auth is disabled and no JWT secret, we have no authentication method
+		return fmt.Errorf("OMNIDROP_JWT_SECRET is required when OAuth is enabled (OMNIDROP_LEGACY_AUTH_ENABLED=false)")
 	}
 
 	// Validate environment-specific rules
@@ -182,4 +212,27 @@ func getFilesDir() string {
 	}
 
 	return fmt.Sprintf("%s/.local/share/omnidrop/files", homeDir)
+}
+
+func getTokenExpiry() time.Duration {
+	expiryStr := getEnvWithDefault("OMNIDROP_TOKEN_EXPIRY", "24h")
+	expiry, err := time.ParseDuration(expiryStr)
+	if err != nil {
+		return 24 * time.Hour // Default to 24 hours
+	}
+	return expiry
+}
+
+func getOAuthClientsFile() string {
+	if file := os.Getenv("OMNIDROP_OAUTH_CLIENTS_FILE"); file != "" {
+		return file
+	}
+
+	// Default location
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "./oauth-clients.yaml" // Fallback to relative path
+	}
+
+	return fmt.Sprintf("%s/.local/share/omnidrop/oauth-clients.yaml", homeDir)
 }

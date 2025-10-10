@@ -46,13 +46,16 @@ func TestApplication_Initialize(t *testing.T) {
 	os.Setenv("TOKEN", "test-token")
 	os.Setenv("PORT", "8788")
 	os.Setenv("OMNIDROP_ENV", "test")
+	os.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 	defer func() {
 		os.Unsetenv("TOKEN")
 		os.Unsetenv("PORT")
 		os.Unsetenv("OMNIDROP_ENV")
+		os.Unsetenv("OMNIDROP_LEGACY_AUTH_ENABLED")
 	}()
 
 	app := New()
+	app.logger = observability.SetupLogger() // Setup logger before initialize
 	err := app.initialize()
 
 	if err != nil {
@@ -78,19 +81,23 @@ func TestApplication_Initialize(t *testing.T) {
 
 func TestApplication_Initialize_ConfigError(t *testing.T) {
 	// Clear TOKEN environment variable to trigger config error
+	// Enable legacy auth to make TOKEN required
 	originalToken := os.Getenv("TOKEN")
+	os.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 	os.Unsetenv("TOKEN")
 	defer func() {
 		if originalToken != "" {
 			os.Setenv("TOKEN", originalToken)
 		}
+		os.Unsetenv("OMNIDROP_LEGACY_AUTH_ENABLED")
 	}()
 
 	app := New()
+	app.logger = observability.SetupLogger() // Setup logger before initialize
 	err := app.initialize()
 
 	if err == nil {
-		t.Error("Expected initialize() to fail when TOKEN is not set")
+		t.Error("Expected initialize() to fail when TOKEN is not set and legacy auth is enabled")
 	}
 }
 
@@ -99,13 +106,16 @@ func TestApplication_GetMethods(t *testing.T) {
 	os.Setenv("TOKEN", "test-token")
 	os.Setenv("PORT", "8788")
 	os.Setenv("OMNIDROP_ENV", "test")
+	os.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 	defer func() {
 		os.Unsetenv("TOKEN")
 		os.Unsetenv("PORT")
 		os.Unsetenv("OMNIDROP_ENV")
+		os.Unsetenv("OMNIDROP_LEGACY_AUTH_ENABLED")
 	}()
 
 	app := New()
+	app.logger = observability.SetupLogger() // Setup logger before initialize
 	err := app.initialize()
 	if err != nil {
 		t.Fatalf("initialize() failed: %v", err)
@@ -134,16 +144,16 @@ func TestApplication_DisplayStartupInfo(t *testing.T) {
 	os.Setenv("TOKEN", "test-token")
 	os.Setenv("PORT", "8788")
 	os.Setenv("OMNIDROP_ENV", "test")
+	os.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 	defer func() {
 		os.Unsetenv("TOKEN")
 		os.Unsetenv("PORT")
 		os.Unsetenv("OMNIDROP_ENV")
+		os.Unsetenv("OMNIDROP_LEGACY_AUTH_ENABLED")
 	}()
 
 	app := NewWithVersion("1.0.0", "2025-09-15")
-
-	// Setup logger (required for displayStartupInfo)
-	app.logger = observability.SetupLogger()
+	app.logger = observability.SetupLogger() // Setup logger before initialize
 
 	err := app.initialize()
 	if err != nil {
@@ -159,16 +169,16 @@ func TestApplication_PerformHealthChecks(t *testing.T) {
 	os.Setenv("TOKEN", "test-token")
 	os.Setenv("PORT", "8788")
 	os.Setenv("OMNIDROP_ENV", "test")
+	os.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 	defer func() {
 		os.Unsetenv("TOKEN")
 		os.Unsetenv("PORT")
 		os.Unsetenv("OMNIDROP_ENV")
+		os.Unsetenv("OMNIDROP_LEGACY_AUTH_ENABLED")
 	}()
 
 	app := New()
-
-	// Setup logger (required for performHealthChecks)
-	app.logger = observability.SetupLogger()
+	app.logger = observability.SetupLogger() // Setup logger before initialize
 
 	err := app.initialize()
 	if err != nil {
@@ -184,16 +194,16 @@ func TestApplication_Shutdown(t *testing.T) {
 	os.Setenv("TOKEN", "test-token")
 	os.Setenv("PORT", "8788")
 	os.Setenv("OMNIDROP_ENV", "test")
+	os.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 	defer func() {
 		os.Unsetenv("TOKEN")
 		os.Unsetenv("PORT")
 		os.Unsetenv("OMNIDROP_ENV")
+		os.Unsetenv("OMNIDROP_LEGACY_AUTH_ENABLED")
 	}()
 
 	app := New()
-
-	// Setup logger (required for shutdown)
-	app.logger = observability.SetupLogger()
+	app.logger = observability.SetupLogger() // Setup logger before initialize
 
 	err := app.initialize()
 	if err != nil {
@@ -213,16 +223,16 @@ func TestApplication_Lifecycle(t *testing.T) {
 	os.Setenv("TOKEN", "test-token")
 	os.Setenv("PORT", "8788")
 	os.Setenv("OMNIDROP_ENV", "test")
+	os.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 	defer func() {
 		os.Unsetenv("TOKEN")
 		os.Unsetenv("PORT")
 		os.Unsetenv("OMNIDROP_ENV")
+		os.Unsetenv("OMNIDROP_LEGACY_AUTH_ENABLED")
 	}()
 
 	app := New()
-
-	// Setup logger (required for displayStartupInfo, performHealthChecks)
-	app.logger = observability.SetupLogger()
+	app.logger = observability.SetupLogger() // Setup logger before initialize
 
 	// Test initialization
 	err := app.initialize()
@@ -254,10 +264,12 @@ func TestApplication_RunBasicFlow(t *testing.T) {
 	os.Setenv("TOKEN", "test-token")
 	os.Setenv("PORT", "8789") // Use different port to avoid conflicts
 	os.Setenv("OMNIDROP_ENV", "test")
+	os.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 	defer func() {
 		os.Unsetenv("TOKEN")
 		os.Unsetenv("PORT")
 		os.Unsetenv("OMNIDROP_ENV")
+		os.Unsetenv("OMNIDROP_LEGACY_AUTH_ENABLED")
 	}()
 
 	app := New()

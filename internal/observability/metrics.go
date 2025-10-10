@@ -122,4 +122,29 @@ var (
 		},
 		[]string{"error_type"}, // compilation, runtime, unknown
 	)
+
+	// OAuth Metrics
+	TokenIssuedTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "omnidrop_oauth_tokens_issued_total",
+			Help: "Total number of OAuth tokens issued",
+		},
+		[]string{"client_id"},
+	)
+
+	TokenValidationTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "omnidrop_oauth_token_validations_total",
+			Help: "Total number of token validation attempts",
+		},
+		[]string{"result"}, // success, expired, invalid
+	)
+
+	ScopeValidationFailures = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "omnidrop_oauth_scope_validation_failures_total",
+			Help: "Total number of scope validation failures",
+		},
+		[]string{"client_id", "required_scope"},
+	)
 )

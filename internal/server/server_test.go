@@ -9,9 +9,20 @@ import (
 
 	"omnidrop/internal/config"
 	"omnidrop/internal/handlers"
+	"omnidrop/internal/middleware"
 	"omnidrop/internal/observability"
 	"omnidrop/test/mocks"
 )
+
+// Helper to create test server with legacy auth middleware
+func createTestServer(cfg *config.Config) *Server {
+	mockOmniFocusService := &mocks.MockOmniFocusService{}
+	mockFilesService := &mocks.MockFilesService{}
+	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
+	logger := observability.SetupLogger()
+	legacyAuth := middleware.NewLegacyAuthMiddleware(cfg.Token, logger)
+	return NewServer(cfg, h, nil, legacyAuth, nil, logger)
+}
 
 func TestNewServer(t *testing.T) {
 	cfg := &config.Config{
@@ -19,11 +30,7 @@ func TestNewServer(t *testing.T) {
 		Token: "test-token",
 	}
 
-	mockOmniFocusService := &mocks.MockOmniFocusService{}
-	mockFilesService := &mocks.MockFilesService{}
-	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
-	logger := observability.SetupLogger()
-	server := NewServer(cfg, h, logger)
+	server := createTestServer(cfg)
 
 	if server == nil {
 		t.Fatal("NewServer returned nil")
@@ -31,10 +38,6 @@ func TestNewServer(t *testing.T) {
 
 	if server.config != cfg {
 		t.Error("Server config not set correctly")
-	}
-
-	if server.handlers != h {
-		t.Error("Server handlers not set correctly")
 	}
 
 	if server.router == nil {
@@ -52,11 +55,7 @@ func TestServer_GetAddress(t *testing.T) {
 		Token: "test-token",
 	}
 
-	mockOmniFocusService := &mocks.MockOmniFocusService{}
-	mockFilesService := &mocks.MockFilesService{}
-	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
-	logger := observability.SetupLogger()
-	server := NewServer(cfg, h, logger)
+	server := createTestServer(cfg)
 
 	expectedAddr := ":8788"
 	actualAddr := server.GetAddress()
@@ -72,11 +71,7 @@ func TestServer_GetRouter(t *testing.T) {
 		Token: "test-token",
 	}
 
-	mockOmniFocusService := &mocks.MockOmniFocusService{}
-	mockFilesService := &mocks.MockFilesService{}
-	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
-	logger := observability.SetupLogger()
-	server := NewServer(cfg, h, logger)
+	server := createTestServer(cfg)
 
 	router := server.GetRouter()
 	if router == nil {
@@ -90,11 +85,7 @@ func TestServer_RouteConfiguration(t *testing.T) {
 		Token: "test-token",
 	}
 
-	mockOmniFocusService := &mocks.MockOmniFocusService{}
-	mockFilesService := &mocks.MockFilesService{}
-	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
-	logger := observability.SetupLogger()
-	server := NewServer(cfg, h, logger)
+	server := createTestServer(cfg)
 
 	router := server.GetRouter()
 
@@ -115,7 +106,7 @@ func TestServer_RouteConfiguration(t *testing.T) {
 			name:           "Tasks endpoint POST without auth",
 			method:         "POST",
 			path:           "/tasks",
-			expectedStatus: http.StatusUnauthorized,
+			expectedStatus: http.StatusUnauthorized, // Legacy auth middleware blocks unauthenticated requests
 		},
 		{
 			name:           "Non-existent endpoint",
@@ -151,11 +142,7 @@ func TestServer_MiddlewareConfiguration(t *testing.T) {
 		Token: "test-token",
 	}
 
-	mockOmniFocusService := &mocks.MockOmniFocusService{}
-	mockFilesService := &mocks.MockFilesService{}
-	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
-	logger := observability.SetupLogger()
-	server := NewServer(cfg, h, logger)
+	server := createTestServer(cfg)
 
 	router := server.GetRouter()
 
@@ -184,11 +171,7 @@ func TestServer_HTTPServerConfiguration(t *testing.T) {
 		Token: "test-token",
 	}
 
-	mockOmniFocusService := &mocks.MockOmniFocusService{}
-	mockFilesService := &mocks.MockFilesService{}
-	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
-	logger := observability.SetupLogger()
-	server := NewServer(cfg, h, logger)
+	server := createTestServer(cfg)
 
 	// Check HTTP server configuration
 	if server.httpSrv.Addr != ":8788" {
@@ -218,11 +201,7 @@ func TestServer_Shutdown(t *testing.T) {
 		Token: "test-token",
 	}
 
-	mockOmniFocusService := &mocks.MockOmniFocusService{}
-	mockFilesService := &mocks.MockFilesService{}
-	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
-	logger := observability.SetupLogger()
-	server := NewServer(cfg, h, logger)
+	server := createTestServer(cfg)
 
 	// Test shutdown with context
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -241,11 +220,7 @@ func TestServer_Integration(t *testing.T) {
 		Token: "test-token",
 	}
 
-	mockOmniFocusService := &mocks.MockOmniFocusService{}
-	mockFilesService := &mocks.MockFilesService{}
-	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
-	logger := observability.SetupLogger()
-	server := NewServer(cfg, h, logger)
+	server := createTestServer(cfg)
 
 	// Test that the server can be used with httptest.Server
 	testServer := httptest.NewServer(server.GetRouter())

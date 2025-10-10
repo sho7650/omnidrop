@@ -8,8 +8,10 @@ import (
 	"syscall"
 	"time"
 
+	"omnidrop/internal/auth"
 	"omnidrop/internal/config"
 	"omnidrop/internal/handlers"
+	"omnidrop/internal/middleware"
 	"omnidrop/internal/observability"
 	"omnidrop/internal/server"
 	"omnidrop/internal/services"
@@ -71,6 +73,49 @@ func (a *Application) initialize() error {
 	}
 	a.config = cfg
 
+	// Initialize OAuth components
+	var oauthRepo *auth.Repository
+	var jwtManager *auth.JWTManager
+	var authMiddleware *auth.Middleware
+	var legacyAuthMiddleware *middleware.LegacyAuthMiddleware
+	var tokenHandler *auth.TokenHandler
+
+	if cfg.JWTSecret != "" {
+		// Initialize OAuth client repository
+		oauthRepo, err = auth.NewRepository(cfg.OAuthClientsFile)
+		if err != nil {
+			a.logger.Warn("Failed to initialize OAuth repository",
+				slog.String("error", err.Error()),
+				slog.String("clients_file", cfg.OAuthClientsFile))
+		} else {
+			// Initialize JWT manager
+			jwtManager = auth.NewJWTManager(cfg.JWTSecret)
+
+			// Initialize OAuth middleware
+			authMiddleware = auth.NewMiddleware(jwtManager, a.logger)
+
+			// Initialize token handler
+			tokenHandler = auth.NewTokenHandler(oauthRepo, jwtManager, cfg.TokenExpiry, a.logger)
+
+			a.logger.Info("✅ OAuth authentication initialized",
+				slog.String("clients_file", cfg.OAuthClientsFile),
+				slog.Duration("token_expiry", cfg.TokenExpiry),
+				slog.Bool("legacy_auth_enabled", cfg.LegacyAuthEnabled))
+		}
+	}
+
+	// Initialize legacy authentication if enabled
+	if cfg.LegacyAuthEnabled && cfg.Token != "" {
+		legacyAuthMiddleware = middleware.NewLegacyAuthMiddleware(cfg.Token, a.logger)
+		a.logger.Info("✅ Legacy authentication initialized (migration mode)")
+	}
+
+	// Ensure at least one authentication method is configured
+	if authMiddleware == nil && legacyAuthMiddleware == nil {
+		a.logger.Error("FATAL: No authentication configured")
+		return config.ErrNoAuthConfigured
+	}
+
 	// Initialize services
 	a.healthService = services.NewHealthService(cfg)
 	a.omniFocusService = services.NewOmniFocusService(cfg)
@@ -78,7 +123,7 @@ func (a *Application) initialize() error {
 
 	// Initialize handlers and server
 	h := handlers.New(cfg, a.omniFocusService, filesService)
-	a.server = server.NewServer(cfg, h, a.logger)
+	a.server = server.NewServer(cfg, h, authMiddleware, legacyAuthMiddleware, tokenHandler, a.logger)
 
 	return nil
 }

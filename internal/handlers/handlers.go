@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"strings"
 	"time"
 
 	"omnidrop/internal/config"
@@ -47,11 +46,7 @@ func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check authentication
-	if !h.authenticateRequest(r) {
-		writeAuthenticationError(w, "Invalid or missing authentication token")
-		return
-	}
+	// Authentication is handled by middleware - no need to re-authenticate here
 
 	// Parse request body
 	var taskReq TaskRequest
@@ -100,16 +95,6 @@ func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		writeInternalError(w, "Failed to encode health response", err)
 	}
-}
-
-func (h *Handlers) authenticateRequest(r *http.Request) bool {
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-		return false
-	}
-
-	providedToken := strings.TrimPrefix(authHeader, "Bearer ")
-	return providedToken == h.cfg.Token
 }
 
 // getVersion returns the version - will be set via ldflags during build
