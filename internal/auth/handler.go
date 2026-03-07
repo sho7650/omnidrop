@@ -30,6 +30,9 @@ func NewTokenHandler(repository *Repository, jwtManager *JWTManager, tokenExpiry
 
 // HandleToken handles POST /oauth/token requests
 func (h *TokenHandler) HandleToken(w http.ResponseWriter, r *http.Request) {
+	// Limit request body size to 1MB
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
 	// Parse request
 	var req TokenRequest
 
@@ -107,7 +110,9 @@ func (h *TokenHandler) HandleToken(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		h.logger.Error("Failed to encode token response", slog.String("error", err.Error()))
+	}
 }
 
 // respondError sends an OAuth error response
@@ -121,5 +126,7 @@ func (h *TokenHandler) respondError(w http.ResponseWriter, status int, errorCode
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		h.logger.Error("Failed to encode error response", slog.String("error", err.Error()))
+	}
 }

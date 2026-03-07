@@ -176,11 +176,10 @@ func TestHealthServiceImpl_CheckOmniFocusStatus_WithMockExecutor(t *testing.T) {
 	service := NewHealthServiceWithExecutor(cfg, mockExecutor)
 	impl := service.(*HealthServiceImpl)
 
-	// For mock executors, CheckOmniFocusStatus should return false
-	// since it can't check real processes
+	// Mock executor returns "OmniFocus" in process list, so status should be true
 	result := impl.CheckOmniFocusStatus()
-	if result {
-		t.Error("Expected CheckOmniFocusStatus to return false for mock executor")
+	if !result {
+		t.Error("Expected CheckOmniFocusStatus to return true when mock reports OmniFocus running")
 	}
 }
 

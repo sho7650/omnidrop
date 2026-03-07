@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"crypto/subtle"
 	"log/slog"
 	"net/http"
 	"os"
@@ -84,7 +85,7 @@ func (m *Middleware) Authenticate(next http.Handler) http.Handler {
 		}
 
 		// OAuth failed - try legacy authentication if enabled
-		if m.legacyAuthEnabled && m.legacyToken != "" && tokenString == m.legacyToken {
+		if m.legacyAuthEnabled && m.legacyToken != "" && subtle.ConstantTimeCompare([]byte(tokenString), []byte(m.legacyToken)) == 1 {
 			m.logger.Debug("Legacy authentication successful (migration mode)")
 
 			// Create pseudo-claims for legacy token

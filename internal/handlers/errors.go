@@ -71,11 +71,6 @@ func writeValidationError(w http.ResponseWriter, message string) {
 	writeErrorResponse(w, http.StatusBadRequest, ErrorCodeValidation, message, nil)
 }
 
-// writeAuthenticationError writes an authentication error response
-func writeAuthenticationError(w http.ResponseWriter, message string) {
-	writeErrorResponse(w, http.StatusUnauthorized, ErrorCodeAuthentication, message, nil)
-}
-
 // writeInternalError writes an internal server error response
 func writeInternalError(w http.ResponseWriter, message string, err error) {
 	writeErrorResponse(w, http.StatusInternalServerError, ErrorCodeInternal, message, err)

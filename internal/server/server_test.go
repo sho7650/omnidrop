@@ -182,12 +182,12 @@ func TestServer_HTTPServerConfiguration(t *testing.T) {
 		t.Errorf("Expected ReadTimeout 15s, got %v", server.httpSrv.ReadTimeout)
 	}
 
-	if server.httpSrv.WriteTimeout != 15*time.Second {
-		t.Errorf("Expected WriteTimeout 15s, got %v", server.httpSrv.WriteTimeout)
+	if server.httpSrv.WriteTimeout != 65*time.Second {
+		t.Errorf("Expected WriteTimeout 65s, got %v", server.httpSrv.WriteTimeout)
 	}
 
-	if server.httpSrv.IdleTimeout != 60*time.Second {
-		t.Errorf("Expected IdleTimeout 60s, got %v", server.httpSrv.IdleTimeout)
+	if server.httpSrv.IdleTimeout != 120*time.Second {
+		t.Errorf("Expected IdleTimeout 120s, got %v", server.httpSrv.IdleTimeout)
 	}
 
 	if server.httpSrv.Handler != server.router {

@@ -38,25 +38,6 @@ func newTestOAuthClient(clientID string, scopes []string) *OAuthClient {
 	}
 }
 
-// newTestOAuthClientWithHash creates an OAuthClient with a specific secret hash
-func newTestOAuthClientWithHash(clientID string, scopes []string, secretHash string) *OAuthClient {
-	return &OAuthClient{
-		ClientID:         clientID,
-		ClientSecretHash: secretHash,
-		Name:             "Test Client",
-		Scopes:           scopes,
-		CreatedAt:        time.Now(),
-		Disabled:         false,
-	}
-}
-
-// newDisabledTestOAuthClient creates a disabled OAuthClient for testing
-func newDisabledTestOAuthClient(clientID string, scopes []string) *OAuthClient {
-	client := newTestOAuthClient(clientID, scopes)
-	client.Disabled = true
-	return client
-}
-
 // generateValidToken generates a valid JWT token for testing
 func generateValidToken(t *testing.T, jm *JWTManager, client *OAuthClient) string {
 	t.Helper()
@@ -151,34 +132,3 @@ func hashPassword(t *testing.T, password string) string {
 	return string(hash)
 }
 
-// createTestConfigContent creates YAML content for OAuth clients configuration
-func createTestConfigContent(clients []OAuthClient) string {
-	content := "clients:\n"
-	for _, client := range clients {
-		content += "  - client_id: " + client.ClientID + "\n"
-		content += "    client_secret_hash: " + client.ClientSecretHash + "\n"
-		content += "    name: " + client.Name + "\n"
-		content += "    scopes:\n"
-		for _, scope := range client.Scopes {
-			content += "      - " + scope + "\n"
-		}
-		if client.Disabled {
-			content += "    disabled: true\n"
-		}
-	}
-	return content
-}
-
-// createTestClaims creates Claims for testing purposes
-func createTestClaims(clientID string, scopes []string) *Claims {
-	now := time.Now()
-	return &Claims{
-		ClientID:  clientID,
-		Scopes:    scopes,
-		Issuer:    DefaultIssuer,
-		Subject:   clientID,
-		IssuedAt:  now.Unix(),
-		ExpiresAt: now.Add(1 * time.Hour).Unix(),
-		JWTID:     "test-jti",
-	}
-}

@@ -122,15 +122,20 @@ func slogLevel(level LogLevel) slog.Level {
 	}
 }
 
+// contextKey is a private type for context keys defined in this package to avoid collisions.
+type contextKey string
+
+const contextKeyLogger contextKey = "logger"
+
 // WithRequestID adds a request ID to the logger context
 func WithRequestID(ctx context.Context, requestID string) context.Context {
 	logger := slog.With("request_id", requestID)
-	return context.WithValue(ctx, "logger", logger)
+	return context.WithValue(ctx, contextKeyLogger, logger)
 }
 
 // LoggerFromContext retrieves the logger from context, falling back to default
 func LoggerFromContext(ctx context.Context) *slog.Logger {
-	if logger, ok := ctx.Value("logger").(*slog.Logger); ok {
+	if logger, ok := ctx.Value(contextKeyLogger).(*slog.Logger); ok {
 		return logger
 	}
 	return slog.Default()

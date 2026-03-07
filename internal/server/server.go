@@ -102,8 +102,8 @@ func (s *Server) setupHTTPServer() {
 		Addr:         ":" + s.config.Port,
 		Handler:      s.router,
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		WriteTimeout: 65 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 }
 

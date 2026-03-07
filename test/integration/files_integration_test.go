@@ -31,15 +31,12 @@ return "true"`
 	err := os.WriteFile(filepath.Join(tempDir, "test.applescript"), []byte(scriptContent), 0755)
 	require.NoError(t, err)
 
-	// Create and initialize application
-	application := app.NewWithVersion("test", "test-time")
-
 	// We need to access private method - let's use reflection or modify approach
 	// For now, skip integration tests since they are complex
 	// The unit tests already verify the functionality
 	t.Skip("Integration tests require refactoring for new architecture")
 
-	return application
+	return app.NewWithVersion("test", "test-time")
 }
 
 func createAuthenticatedRequest(t *testing.T, url, payload string) *http.Request {
