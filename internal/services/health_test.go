@@ -42,7 +42,7 @@ func TestNewHealthService(t *testing.T) {
 	}
 
 	// Verify it implements the interface
-	var _ HealthService = service
+	var _ = service
 }
 
 func TestNewHealthServiceWithExecutor(t *testing.T) {
@@ -59,7 +59,7 @@ func TestNewHealthServiceWithExecutor(t *testing.T) {
 	}
 
 	// Verify it implements the interface
-	var _ HealthService = service
+	var _ = service
 }
 
 func TestHealthServiceImpl_CheckAppleScriptHealth_Success(t *testing.T) {
@@ -232,14 +232,14 @@ return "test"`
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	_, err = file.WriteString(content)
 	return err
 }
 
 func removeTempTestScript(path string) {
-	os.Remove(path)
+	_ = os.Remove(path)
 }
 
 // Tests using the new TestAppleScriptExecutor

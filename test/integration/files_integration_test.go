@@ -19,11 +19,11 @@ func setupTestApp(t *testing.T) *app.Application {
 	tempDir := t.TempDir()
 
 	// Set environment variables for testing
-	os.Setenv("TOKEN", "test-token")
-	os.Setenv("PORT", "8788")
-	os.Setenv("OMNIDROP_ENV", "test")
-	os.Setenv("OMNIDROP_FILES_DIR", tempDir)
-	os.Setenv("OMNIDROP_SCRIPT", filepath.Join(tempDir, "test.applescript"))
+	t.Setenv("TOKEN", "test-token")
+	t.Setenv("PORT", "8788")
+	t.Setenv("OMNIDROP_ENV", "test")
+	t.Setenv("OMNIDROP_FILES_DIR", tempDir)
+	t.Setenv("OMNIDROP_SCRIPT", filepath.Join(tempDir, "test.applescript"))
 
 	// Create a dummy AppleScript file for testing
 	scriptContent := `#!/usr/bin/osascript
@@ -65,7 +65,7 @@ func TestFilesEndpoint_Success(t *testing.T) {
 	req := createAuthenticatedRequest(t, server.URL+"/files", payload)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Assert
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -96,7 +96,7 @@ func TestFilesEndpoint_WithDirectory(t *testing.T) {
 	req := createAuthenticatedRequest(t, server.URL+"/files", payload)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Assert
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -125,7 +125,7 @@ func TestFilesEndpoint_AuthenticationError(t *testing.T) {
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Assert
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
@@ -176,7 +176,7 @@ func TestFilesEndpoint_ValidationError(t *testing.T) {
 			req := createAuthenticatedRequest(t, server.URL+"/files", tc.payload)
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 
@@ -203,7 +203,7 @@ func TestFilesEndpoint_MethodNotAllowed(t *testing.T) {
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Assert
 	assert.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)

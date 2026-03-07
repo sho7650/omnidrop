@@ -107,10 +107,12 @@ func (c *Config) validateEnvironment() error {
 
 	// Protect production script in non-production environments
 	if c.Environment != "production" {
-		homeDir, _ := os.UserHomeDir()
-		prodScriptPath := fmt.Sprintf("%s/.local/share/omnidrop/omnidrop.applescript", homeDir)
-		if c.ScriptPath == prodScriptPath {
-			return fmt.Errorf("❌ FATAL: Cannot use production AppleScript in non-production environment")
+		homeDir, err := os.UserHomeDir()
+		if err == nil {
+			prodScriptPath := fmt.Sprintf("%s/.local/share/omnidrop/omnidrop.applescript", homeDir)
+			if c.ScriptPath == prodScriptPath {
+				return fmt.Errorf("❌ FATAL: Cannot use production AppleScript in non-production environment")
+			}
 		}
 	}
 

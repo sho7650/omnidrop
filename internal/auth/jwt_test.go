@@ -388,8 +388,8 @@ func TestMapClaimsToClaims(t *testing.T) {
 		claims, err := mapClaimsToClaims(mc)
 
 		require.NoError(t, err)
-		// Non-string values should result in empty strings
-		assert.Len(t, claims.Scopes, 3)
+		// Non-string values should be filtered out
+		assert.Len(t, claims.Scopes, 1)
 		assert.Equal(t, "valid-scope", claims.Scopes[0])
 	})
 }

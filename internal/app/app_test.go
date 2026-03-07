@@ -43,16 +43,10 @@ func TestNewWithVersion(t *testing.T) {
 
 func TestApplication_Initialize(t *testing.T) {
 	// Set required environment variables for testing
-	os.Setenv("TOKEN", "test-token")
-	os.Setenv("PORT", "8788")
-	os.Setenv("OMNIDROP_ENV", "test")
-	os.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
-	defer func() {
-		os.Unsetenv("TOKEN")
-		os.Unsetenv("PORT")
-		os.Unsetenv("OMNIDROP_ENV")
-		os.Unsetenv("OMNIDROP_LEGACY_AUTH_ENABLED")
-	}()
+	t.Setenv("TOKEN", "test-token")
+	t.Setenv("PORT", "8788")
+	t.Setenv("OMNIDROP_ENV", "test")
+	t.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 
 	app := New()
 	app.logger = observability.SetupLogger() // Setup logger before initialize
@@ -82,15 +76,8 @@ func TestApplication_Initialize(t *testing.T) {
 func TestApplication_Initialize_ConfigError(t *testing.T) {
 	// Clear TOKEN environment variable to trigger config error
 	// Enable legacy auth to make TOKEN required
-	originalToken := os.Getenv("TOKEN")
-	os.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
-	os.Unsetenv("TOKEN")
-	defer func() {
-		if originalToken != "" {
-			os.Setenv("TOKEN", originalToken)
-		}
-		os.Unsetenv("OMNIDROP_LEGACY_AUTH_ENABLED")
-	}()
+	t.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
+	t.Setenv("TOKEN", "")
 
 	app := New()
 	app.logger = observability.SetupLogger() // Setup logger before initialize
@@ -103,16 +90,10 @@ func TestApplication_Initialize_ConfigError(t *testing.T) {
 
 func TestApplication_GetMethods(t *testing.T) {
 	// Set required environment variables for testing
-	os.Setenv("TOKEN", "test-token")
-	os.Setenv("PORT", "8788")
-	os.Setenv("OMNIDROP_ENV", "test")
-	os.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
-	defer func() {
-		os.Unsetenv("TOKEN")
-		os.Unsetenv("PORT")
-		os.Unsetenv("OMNIDROP_ENV")
-		os.Unsetenv("OMNIDROP_LEGACY_AUTH_ENABLED")
-	}()
+	t.Setenv("TOKEN", "test-token")
+	t.Setenv("PORT", "8788")
+	t.Setenv("OMNIDROP_ENV", "test")
+	t.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 
 	app := New()
 	app.logger = observability.SetupLogger() // Setup logger before initialize
@@ -141,16 +122,10 @@ func TestApplication_GetMethods(t *testing.T) {
 
 func TestApplication_DisplayStartupInfo(t *testing.T) {
 	// Set required environment variables for testing
-	os.Setenv("TOKEN", "test-token")
-	os.Setenv("PORT", "8788")
-	os.Setenv("OMNIDROP_ENV", "test")
-	os.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
-	defer func() {
-		os.Unsetenv("TOKEN")
-		os.Unsetenv("PORT")
-		os.Unsetenv("OMNIDROP_ENV")
-		os.Unsetenv("OMNIDROP_LEGACY_AUTH_ENABLED")
-	}()
+	t.Setenv("TOKEN", "test-token")
+	t.Setenv("PORT", "8788")
+	t.Setenv("OMNIDROP_ENV", "test")
+	t.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 
 	app := NewWithVersion("1.0.0", "2025-09-15")
 	app.logger = observability.SetupLogger() // Setup logger before initialize
@@ -166,16 +141,10 @@ func TestApplication_DisplayStartupInfo(t *testing.T) {
 
 func TestApplication_PerformHealthChecks(t *testing.T) {
 	// Set required environment variables for testing
-	os.Setenv("TOKEN", "test-token")
-	os.Setenv("PORT", "8788")
-	os.Setenv("OMNIDROP_ENV", "test")
-	os.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
-	defer func() {
-		os.Unsetenv("TOKEN")
-		os.Unsetenv("PORT")
-		os.Unsetenv("OMNIDROP_ENV")
-		os.Unsetenv("OMNIDROP_LEGACY_AUTH_ENABLED")
-	}()
+	t.Setenv("TOKEN", "test-token")
+	t.Setenv("PORT", "8788")
+	t.Setenv("OMNIDROP_ENV", "test")
+	t.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 
 	app := New()
 	app.logger = observability.SetupLogger() // Setup logger before initialize
@@ -191,16 +160,10 @@ func TestApplication_PerformHealthChecks(t *testing.T) {
 
 func TestApplication_Shutdown(t *testing.T) {
 	// Set required environment variables for testing
-	os.Setenv("TOKEN", "test-token")
-	os.Setenv("PORT", "8788")
-	os.Setenv("OMNIDROP_ENV", "test")
-	os.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
-	defer func() {
-		os.Unsetenv("TOKEN")
-		os.Unsetenv("PORT")
-		os.Unsetenv("OMNIDROP_ENV")
-		os.Unsetenv("OMNIDROP_LEGACY_AUTH_ENABLED")
-	}()
+	t.Setenv("TOKEN", "test-token")
+	t.Setenv("PORT", "8788")
+	t.Setenv("OMNIDROP_ENV", "test")
+	t.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 
 	app := New()
 	app.logger = observability.SetupLogger() // Setup logger before initialize
@@ -220,16 +183,10 @@ func TestApplication_Shutdown(t *testing.T) {
 func TestApplication_Lifecycle(t *testing.T) {
 	// This test verifies the basic lifecycle without actually running the server
 	// Set required environment variables for testing
-	os.Setenv("TOKEN", "test-token")
-	os.Setenv("PORT", "8788")
-	os.Setenv("OMNIDROP_ENV", "test")
-	os.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
-	defer func() {
-		os.Unsetenv("TOKEN")
-		os.Unsetenv("PORT")
-		os.Unsetenv("OMNIDROP_ENV")
-		os.Unsetenv("OMNIDROP_LEGACY_AUTH_ENABLED")
-	}()
+	t.Setenv("TOKEN", "test-token")
+	t.Setenv("PORT", "8788")
+	t.Setenv("OMNIDROP_ENV", "test")
+	t.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 
 	app := New()
 	app.logger = observability.SetupLogger() // Setup logger before initialize
@@ -261,16 +218,10 @@ func TestApplication_Lifecycle(t *testing.T) {
 // Note: This is a basic test since Run() normally blocks
 func TestApplication_RunBasicFlow(t *testing.T) {
 	// Set required environment variables for testing
-	os.Setenv("TOKEN", "test-token")
-	os.Setenv("PORT", "8789") // Use different port to avoid conflicts
-	os.Setenv("OMNIDROP_ENV", "test")
-	os.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
-	defer func() {
-		os.Unsetenv("TOKEN")
-		os.Unsetenv("PORT")
-		os.Unsetenv("OMNIDROP_ENV")
-		os.Unsetenv("OMNIDROP_LEGACY_AUTH_ENABLED")
-	}()
+	t.Setenv("TOKEN", "test-token")
+	t.Setenv("PORT", "8789") // Use different port to avoid conflicts
+	t.Setenv("OMNIDROP_ENV", "test")
+	t.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 
 	app := New()
 
@@ -279,7 +230,7 @@ func TestApplication_RunBasicFlow(t *testing.T) {
 		// Send interrupt signal after a short delay to stop the application
 		time.Sleep(100 * time.Millisecond)
 		if p, err := os.FindProcess(os.Getpid()); err == nil {
-			p.Signal(os.Interrupt)
+			_ = p.Signal(os.Interrupt)
 		}
 	}()
 

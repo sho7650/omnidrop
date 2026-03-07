@@ -22,7 +22,7 @@ func TestHealthEndpoint(t *testing.T) {
 	// Mock handler for testing
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{
 			"status":  "ok",
 			"version": "test",
 		})
@@ -97,8 +97,7 @@ func TestTaskRequestValidation(t *testing.T) {
 
 func TestEnvironmentVariables(t *testing.T) {
 	// Test that we can read environment variables
-	os.Setenv("TEST_VAR", "test_value")
-	defer os.Unsetenv("TEST_VAR")
+	t.Setenv("TEST_VAR", "test_value")
 
 	value := os.Getenv("TEST_VAR")
 	if value != "test_value" {

@@ -132,10 +132,10 @@ func mapClaimsToClaims(mc jwt.MapClaims) (*Claims, error) {
 
 	// Extract scopes
 	if scopesInterface, ok := mc["scopes"].([]interface{}); ok {
-		scopes := make([]string, len(scopesInterface))
-		for i, s := range scopesInterface {
+		scopes := make([]string, 0, len(scopesInterface))
+		for _, s := range scopesInterface {
 			if str, ok := s.(string); ok {
-				scopes[i] = str
+				scopes = append(scopes, str)
 			}
 		}
 		claims.Scopes = scopes
