@@ -1,0 +1,597 @@
+---
+name: improve
+description: |
+  Autonomous improvement loop — repeatedly runs QA, Fix, and Refactor cycles to continuously improve code quality.
+  Each round runs tests and auto-reverts refactoring commits that break tests.
+  Leverages SuperClaude commands for enhanced analysis.
+  Uses MCP servers (serena,sequential-thinking,context7,playwright,tavily) for semantic analysis, documentation lookup, and multi-step reasoning.
+arguments:
+  - name: rounds
+    description: Maximum number of improvement rounds (early termination if 0 issues found)
+    default: "5"
+  - name: focus
+    description: Scope of improvement (all)
+    default: all
+  - name: dry-run
+    description: If true, run QA only without fixes or refactoring
+    default: "false"
+---
+
+# Autonomous Improvement Loop
+
+Repeats QA → Fix → Refactor → Safety Check → Reflection → Self-Learning for up to {{rounds}} rounds.
+Terminates early when open issues reach 0, or when abort conditions are triggered.
+
+## Toolchain
+
+This skill uses the following tools:
+
+**SuperClaude commands:**
+- `/sc:analyze` — Phase 1: Code and architecture structural analysis
+- `/sc:troubleshoot` — Phase 2: Debug and root-cause test failures
+- `/sc:cleanup` — Phase 3: Structured refactoring
+- `/sc:reflect` — Phase 5: Structured retrospective
+
+**MCP servers:**
+- `serena` — Phase 1/3: Semantic code understanding, dependency graph analysis
+- `sequential-thinking` — Phase 1/6: Multi-step reasoning for complex problems
+- `context7` — Phase 2: Official documentation lookup for chi and related tools
+- `playwright` — Phase 1/4: Browser-based E2E test execution
+- `tavily` — Phase 6: Web research for best practices
+
+**Fallback rule:** If any MCP server or `/sc:` command is unavailable, log a warning and continue without it. MCPs and SuperClaude enhance the loop but are NOT required.
+
+## Critical Safety Rules
+
+- **All work MUST be done on a feature branch. NEVER modify the main branch.**
+- Auto-revert refactoring commits when tests break after refactoring.
+- Record results of each phase in `.improvement-state/`.
+- Follow Conventional Commits commit format.
+- **NEVER weaken or delete tests to make them pass.** Fix the implementation instead.
+
+## Abort Conditions (Loop Stops Entirely)
+
+The loop MUST stop immediately and report to the user if ANY of these occur:
+
+1. **Git conflict**: Any git operation (revert, merge) fails with a conflict.
+2. **Net regression**: Issue count INCREASES for 2 consecutive rounds.
+3. **Recurring failure**: The same file/test fails in 2 consecutive rounds after being "fixed".
+4. **Phase 2 regression**: A fix in Phase 2 causes NEW test failures that did not exist before.
+5. **Consecutive reverts**: Phase 4 auto-revert triggers in 2 consecutive rounds.
+6. **Test runner crash**: Test command exits non-zero but produces no failure lines AND no test summary (infrastructure failure, not test failure).
+7. **Disk space critical**: Less than 500MB free disk space.
+
+When aborting, output:
+```
+=== LOOP ABORTED ===
+Reason: {specific abort condition}
+Round: N / {{rounds}}
+Branch: {branch name}
+Last stable state: {git tag name}
+Action required: {what the user should do}
+```
+
+## Phase 0: Setup (first round only)
+
+1. Verify the working directory is a git repository.
+2. Run `git status` to confirm the working tree is clean.
+   - If not clean, warn the user and abort.
+3. Check `timeout` command availability:
+   ```bash
+   if command -v timeout >/dev/null 2>&1; then
+     TIMEOUT_CMD="timeout --kill-after=10s"
+   elif command -v gtimeout >/dev/null 2>&1; then
+     TIMEOUT_CMD="gtimeout --kill-after=10s"
+   else
+     TIMEOUT_CMD=""
+     echo "⚠️ timeout command not available — tests will run without timeout protection"
+   fi
+   ```
+   Use `$TIMEOUT_CMD` wherever this skill specifies `timeout --kill-after=10s`.
+4. Confirm the current branch is main.
+5. Create a feature branch:
+   ```bash
+   BRANCH="improve/$(date +%Y%m%d-%H%M%S)"
+   if git rev-parse --verify "$BRANCH" >/dev/null 2>&1; then
+     echo "ERROR: Branch $BRANCH already exists. Aborting."
+     exit 1
+   fi
+   git checkout -b "$BRANCH"
+   ```
+6. Create the state directory:
+   ```bash
+   mkdir -p .improvement-state
+   ```
+7. Generate log environment from config:
+   ```bash
+   python3 -c "
+import json, os
+config = json.load(open('.improvement-config.json')) if os.path.exists('.improvement-config.json') else {}
+logging_conf = config.get('logging', {})
+print(f'LOG_LEVEL={logging_conf.get(\"level\", \"INFO\")}')
+print(f'LOG_COMMANDS={str(logging_conf.get(\"include_commands\", True)).lower()}')
+" > .improvement-state/log-env.sh
+   ```
+8. Generate log functions:
+   ```bash
+   cat > .improvement-state/log-functions.sh << 'LOGEOF'
+#!/bin/bash
+# Logging functions for improvement loop
+
+[ -f .improvement-state/log-env.sh ] && source .improvement-state/log-env.sh
+LOG_FILE="${LOG_FILE:-.improvement-state/execution.log}"
+LOG_LEVEL="${LOG_LEVEL:-INFO}"
+LOG_COMMANDS="${LOG_COMMANDS:-true}"
+
+_log() {
+  local level="$1"; shift
+  printf "[%s] [%-6s] %s\n" "$(date '+%H:%M:%S')" "$level" "$*" >> "$LOG_FILE"
+}
+
+log_debug() { [[ "$LOG_LEVEL" == "DEBUG" ]] && _log "DEBUG" "$@"; return 0; }
+log_info() { _log "INFO" "$@"; }
+log_warn() { _log "WARN" "$@"; }
+log_error() { _log "ERROR" "$@"; }
+log_abort() { _log "ABORT" "$@"; echo "[ABORT] $*"; }
+log_step_start() { _log "START" "$1"; }
+log_step_end() { local step="$1"; shift; _log "END" "$step $*"; }
+log_cmd() { [[ "$LOG_COMMANDS" == "true" ]] && _log "CMD" "$ $*"; }
+
+run_logged() {
+  local label="$1"; shift
+  local output_file="$1"; shift
+  log_step_start "$label"
+  # Handle timeout duration pattern (e.g., "120s"): if first arg matches Ns pattern,
+  # prepend $TIMEOUT_CMD if available, otherwise skip the duration
+  local cmd_args=("$@")
+  if [[ "${cmd_args[0]}" =~ ^[0-9]+s$ ]]; then
+    if [ -n "$TIMEOUT_CMD" ]; then
+      cmd_args=($TIMEOUT_CMD "${cmd_args[@]}")
+    else
+      cmd_args=("${cmd_args[@]:1}")
+    fi
+  fi
+  [[ "$LOG_COMMANDS" == "true" ]] && _log "CMD" "$ ${cmd_args[*]}"
+  "${cmd_args[@]}" 2>&1 | tee "$output_file"
+  local exit_code=${PIPESTATUS[0]}
+  local output_lines=$(wc -l < "$output_file" 2>/dev/null || echo 0)
+  log_step_end "$label" "exit=$exit_code, lines=$output_lines"
+  return $exit_code
+}
+LOGEOF
+   ```
+9. Initialize execution log:
+   ```bash
+   echo "=== Improvement Loop Started ===" > .improvement-state/execution.log
+   echo "Time: $(date '+%Y-%m-%dT%H:%M:%S')" >> .improvement-state/execution.log
+   echo "Parameters: rounds={{rounds}}, focus={{focus}}, dry-run={{dry-run}}" >> .improvement-state/execution.log
+   echo "" >> .improvement-state/execution.log
+   ```
+10. Initialize the run log:
+   ```bash
+   echo "# Run Log — $BRANCH" > .improvement-state/run.log
+   echo "Started: $(date '+%Y-%m-%dT%H:%M:%S')" >> .improvement-state/run.log
+   echo "Parameters: rounds={{rounds}}, focus={{focus}}, dry-run={{dry-run}}" >> .improvement-state/run.log
+   ```
+11. Load `.improvement-config.json` if it exists. Otherwise use default values.
+12. **Capture test baseline** — run unit tests to record the initial state:
+   ```bash
+   source .improvement-state/log-functions.sh
+   run_logged "phase0_test_baseline" ".improvement-state/test-baseline.log" ${TEST_TIMEOUT:-120}s go test ./... 2>&1
+   BASELINE_UNIT_EXIT=$?
+   ```
+   Extract baseline test counts from output. Record: `BASELINE_UNIT_TEST_COUNT`, `BASELINE_UNIT_FAIL_COUNT`.
+   These baselines are used throughout the loop to detect regressions.
+13. **Use available MCP servers to understand project structure** — Query semantic analysis tools for module structure, dependency graph, and key entry points.
+
+**Phase 0 complete. Proceed IMMEDIATELY to the Main Loop.**
+
+## Running Tests (Reference)
+
+Whenever this skill says "run tests", follow this procedure:
+
+1. **Wrap with timeout**: `$TIMEOUT_CMD ${TEST_TIMEOUT:-120}s <command> | tee <output-file>`
+   - `$TIMEOUT_CMD` was set in Phase 0. If empty, run the command directly without timeout.
+2. **Classify exit code**: 124=timeout (HIGH issue), infrastructure failure patterns (Docker, port, disk) → NOT a test failure, else → actual test failure.
+3. **Parse failures** using go test output patterns (see `references/qa-guide.md` for parsing rules).
+4. **Create a separate issue for EACH failure** with: file, line, test name, error, severity=HIGH.
+5. **Regression check**: If current test count < `BASELINE_UNIT_TEST_COUNT` → **ABORT** (test file deleted).
+
+---
+
+## Main Loop: Round 1 ~ {{rounds}}
+
+Log `[Round N/{{rounds}}]` at the start of each round.
+
+### Phase 1: QA (Issue Detection)
+
+Scope: {{focus}}
+
+**Create a savepoint before this round:**
+```bash
+source .improvement-state/log-functions.sh
+log_step_start "main_loop_round$ROUND_NUM"
+log_info "Creating savepoint for round $ROUND_NUM"
+git tag "savepoint-round-$ROUND_NUM"
+```
+
+Run QA checks. If agent teams are available (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`), run in parallel using separate agent teams. Otherwise, run sequentially.
+
+#### 1-1. Lint (golangci-lint)
+
+```bash
+source .improvement-state/log-functions.sh
+run_logged "phase1_lint" "/tmp/lint-output.log" golangci-lint run 2>&1
+LINT_EXIT=$?
+```
+
+Extract warnings/errors from output and record as issues.
+
+#### 1-2. Type Check (go vet)
+
+```bash
+source .improvement-state/log-functions.sh
+run_logged "phase1_typecheck" "/tmp/typecheck-output.log" go vet ./... 2>&1
+TYPECHECK_EXIT=$?
+```
+
+Record type errors as issues (severity: HIGH — type errors mean compilation failure).
+
+#### 1-3. Unit Tests (go test)
+
+```bash
+source .improvement-state/log-functions.sh
+run_logged "phase1_unit_test" "/tmp/test-output.log" ${TEST_TIMEOUT:-120}s go test ./... 2>&1
+UNIT_TEST_EXIT=$?
+```
+
+Parse test output using go test patterns (see `references/qa-guide.md`).
+File each failure as a separate issue.
+
+
+#### 1-5. Code Analysis with /sc:analyze
+
+Use `/sc:analyze` for structural analysis:
+
+```
+/sc:analyze "Analyze {{focus}} codebase for code quality issues:
+- Type safety problems
+- Error handling gaps
+- Files exceeding 300 lines
+- Functions exceeding 50 lines
+- Missing input validation
+- Hardcoded strings/config values
+- Circular dependencies"
+```
+
+**MCP-enhanced analysis**: Use available MCP servers for deeper code understanding:
+Use serena for semantic analysis: check module dependency issues, unused exports, and circular call graphs.
+Use sequential-thinking for complex architectural problems: multi-step reasoning to identify root causes at the design level.
+Use context7 to look up official documentation for chi APIs before flagging potential misuse.
+
+#### Code Review (Claude)
+
+If no SuperClaude `/sc:analyze` is available, perform manual code review:
+- Read source files in cmd,internal
+- Check for: type safety, error handling, file/function size limits, input validation, hardcoded values, circular dependencies
+- Classify findings by severity: CRITICAL, HIGH, MEDIUM, LOW
+
+#### Issue Aggregation
+
+Save all QA results to `.improvement-state/issues-round-N.md`:
+
+```markdown
+# Issues - Round N
+
+**Found**: X issues | **Severity**: CRITICAL=0, HIGH=0, MEDIUM=0, LOW=0
+**Baseline test count**: {BASELINE_TEST_COUNT} | **Current test count**: {current}
+
+## Issues
+
+### [SEVERITY] Short description
+- **File**: `path/to/file:line`
+- **Source**: lint | typecheck | unit-test | e2e | review
+- **Detail**: Description of the problem
+- **Suggestion**: Proposed fix (if any)
+```
+
+**Decision**:
+- Issue count is 0 → exit the loop and proceed to Phase 7 (Finalize).
+- **Quality gate check**: If `.improvement-config.json` defines `quality_gates`, enforce them:
+  - `max_critical_issues`: If CRITICAL count exceeds this, **ABORT** with "Quality gate failed: too many CRITICAL issues".
+  - `max_high_issues`: If HIGH count exceeds this, **ABORT** with "Quality gate failed: too many HIGH issues".
+  - `min_test_pass_rate`: If test pass rate drops below this percentage, **ABORT** with "Quality gate failed: test pass rate below threshold".
+  - A `null` value for any gate means it is not enforced.
+- **Net regression check**: If this round's issue count > previous round's, increment `REGRESSION_COUNTER`. If `REGRESSION_COUNTER >= 2`, trigger abort condition #2.
+
+### Phase 2: Fix (Issue Resolution)
+
+Skip this phase if {{dry-run}} is true.
+
+#### 2-1. Auto-fix with Tools
+
+Apply lint auto-fixes first:
+```bash
+source .improvement-state/log-functions.sh
+run_logged "phase2_lint_fix" "/tmp/lint-fix-output.log" golangci-lint run --fix 2>&1
+```
+
+#### 2-2. Fix Test Failures (HIGHEST PRIORITY)
+
+**Test failure issues MUST be fixed before all other issues.**
+
+**Use `/sc:troubleshoot` for debugging:**
+```
+/sc:troubleshoot "Test failure in {test file name}:
+Error: {error message}
+Analyze the root cause and suggest a fix."
+```
+
+Fix procedure:
+1. **Read the source code** of both the failing test file and the implementation under test.
+2. **Identify the cause**.
+3. **Decide the fix strategy**:
+   - Bug in implementation → fix the implementation (NEVER weaken tests)
+   - Mock/setup issue in test → fix the test code (legitimate fix)
+   - Outdated test → update the test
+4. **Verify the fix** by re-running only that test file:
+   ```bash
+   source .improvement-state/log-functions.sh
+   run_logged "phase2_verify_test" "/tmp/single-test-output.log" go test -run {testname} ./...
+   SINGLE_TEST_EXIT=$?
+   ```
+   If failures remain, retry (maximum 3 attempts per test). If still failing after 3 attempts, log as "unresolvable" and proceed.
+
+#### 2-3. Fix Review Findings
+
+Prioritize HIGH severity and above. Only fix MEDIUM and below if safe and low-risk.
+
+#### 2-4. Commit
+
+```bash
+source .improvement-state/log-functions.sh
+log_step_start "phase2_commit"
+git add -A
+git commit -m "fix: resolve N QA issues [round $ROUND_NUM]"
+log_step_end "phase2_commit" "committed"
+```
+
+#### 2-5. Post-fix Regression Check (MANDATORY)
+
+After committing Phase 2 fixes, run the full test suite:
+
+```bash
+source .improvement-state/log-functions.sh
+run_logged "phase2_postfix_test" "/tmp/postfix-output.log" ${TEST_TIMEOUT:-120}s go test ./... 2>&1
+POSTFIX_EXIT=$?
+```
+
+- **All tests pass**: Proceed to Phase 3.
+- **New failures appear** (not in Phase 1 issue list): **Trigger abort condition #4.** Revert:
+  ```bash
+  source .improvement-state/log-functions.sh
+  log_error "Phase 2 fix caused regression - reverting"
+  git revert --no-edit HEAD
+  log_info "Reverted Phase 2 fix commit"
+  ```
+  Log: "Phase 2 fix caused regression. Reverted." Skip to Phase 5.
+- **Same failures as Phase 1 remain**: Log as "partially fixed", proceed to Phase 3.
+
+### Phase 3: Refactor (Quality Improvement)
+
+Skip this phase if {{dry-run}} is true.
+
+**Pre-condition gate (MANDATORY):**
+Run the full test suite:
+```bash
+source .improvement-state/log-functions.sh
+run_logged "phase3_precondition_test" "/tmp/phase3-precheck-output.log" ${TEST_TIMEOUT:-120}s go test ./... 2>&1
+PHASE3_PRECHECK_EXIT=$?
+```
+
+**If ANY test fails:**
+1. Attempt fix (maximum 2 attempts).
+2. If fixed: commit as `fix: repair failing tests before refactor [round $ROUND_NUM]`
+3. Re-run to confirm ALL tests pass.
+4. If still failing: **skip Phase 3**, proceed to Phase 5. Log: "Refactoring skipped — tests not stable."
+
+**Check refactor blocklist:** Load `.improvement-state/refactor-blocklist.json`. Skip any file/strategy combination that previously caused a revert.
+
+**Use `/sc:cleanup` for refactoring:**
+```
+/sc:cleanup "{target file path} — strategy: {refactoring strategy}"
+```
+
+Also refer to `references/refactor-patterns.md` for safe refactoring patterns.
+
+Maximum refactorings per round (configurable via `refactor.max_per_round` in `.improvement-config.json`, default: 3).
+
+Refactoring candidate selection criteria:
+- Files where Phase 1 found issues
+- Files exceeding 300 lines
+- Functions exceeding 50 lines
+- Complex conditionals (nesting 3+ levels)
+- Duplicate code
+- **Exclude files in refactor-blocklist**
+
+**Commit each refactoring individually:**
+```bash
+source .improvement-state/log-functions.sh
+log_step_start "phase3_refactor_commit"
+git add -A
+git commit -m "refactor: {specific description} [round $ROUND_NUM]"
+log_step_end "phase3_refactor_commit" "committed"
+```
+
+### Phase 4: Safety Check
+
+Only run if refactoring was performed in Phase 3.
+
+Unit tests MUST pass for the round to be considered safe.
+
+```bash
+source .improvement-state/log-functions.sh
+run_logged "phase4_safety_unit_test" "/tmp/safety-unit-output.log" ${TEST_TIMEOUT:-120}s go test ./... 2>&1
+SAFETY_UNIT_EXIT=$?
+```
+
+
+Run the test count regression check (current total >= BASELINE_UNIT_TEST_COUNT).
+
+#### On all tests passing
+
+Proceed to Phase 5. Reset `CONSECUTIVE_REVERT_COUNT` to 0.
+
+#### On test failure — Auto-Revert
+
+Identify and revert Phase 3 refactoring commits using stable SHAs:
+
+```bash
+source .improvement-state/log-functions.sh
+log_step_start "phase4_auto_revert"
+
+# Collect refactor commit SHAs (newest first)
+REFACTOR_SHAS=$(git log --oneline "savepoint-round-$ROUND_NUM"..HEAD | grep "refactor:.*\[round $ROUND_NUM\]" | awk '{print $1}')
+
+# Revert each (newest first)
+for SHA in $REFACTOR_SHAS; do
+  log_info "Reverting refactor commit $SHA"
+  if ! git revert --no-edit "$SHA" 2>&1; then
+    log_abort "Revert conflict on $SHA - aborting loop"
+    git revert --abort
+    # Trigger abort condition #1 (git conflict)
+    exit 1
+  fi
+done
+log_step_end "phase4_auto_revert" "reverted"
+```
+
+After revert, re-run tests:
+```bash
+source .improvement-state/log-functions.sh
+run_logged "phase4_post_revert_test" "/tmp/post-revert-output.log" ${TEST_TIMEOUT:-120}s go test ./... 2>&1
+POST_REVERT_EXIT=$?
+```
+
+- **Tests pass**: Log "Refactoring reverted, tests recovered." Add file + strategy to `.improvement-state/refactor-blocklist.json`. Increment `CONSECUTIVE_REVERT_COUNT`.
+- **Tests still fail**: Revert to the savepoint:
+  ```bash
+  source .improvement-state/log-functions.sh
+  log_error "Tests still failing after revert - full round revert"
+  git revert --no-edit "savepoint-round-$ROUND_NUM"..HEAD
+  log_info "Full round revert completed"
+  ```
+  Log: "Full round revert."
+
+**Consecutive revert check**: If `CONSECUTIVE_REVERT_COUNT >= 2`, trigger abort condition #5.
+
+### Phase 5: Reflection (Record Results)
+
+**Use `/sc:reflect` for a structured retrospective:**
+```
+/sc:reflect "Improvement Loop Round $ROUND_NUM retrospective:
+- QA found X issues
+- Fixed Y issues
+- Refactored Z files (reverted: W)
+- Safety Check: PASSED/REVERTED/SKIPPED
+Analyze what went well, what didn't, and patterns to watch."
+```
+
+Append to `.improvement-state/reflection-log.md`:
+
+```markdown
+## Round N - YYYY-MM-DD HH:MM
+
+| Phase | Result |
+|-------|--------|
+| QA | X issues found |
+| Fix | Y/X issues fixed |
+| Post-fix regression | PASSED / REVERTED |
+| Refactor | Z refactorings applied / SKIPPED |
+| Safety Check | PASSED / REVERTED / SKIPPED |
+
+### Modified Files
+- `path/to/file1` - summary of changes
+
+### Observations
+(1-3 sentence summary)
+
+---
+```
+
+**End round logging:**
+```bash
+source .improvement-state/log-functions.sh
+log_step_end "main_loop_round$ROUND_NUM" "issues=$ISSUES_FOUND, fixed=$ISSUES_FIXED"
+```
+
+### Phase 6: Self-Learning (Improve the Improvement Process)
+
+**Run ONLY after the final round** (not during intermediate rounds).
+
+Analyze all rounds in `.improvement-state/reflection-log.md`:
+- Organize trends in issue count, fix count, and revert rate across rounds
+- Identify recurring issue category patterns
+- Generate prioritized improvement suggestions
+
+**Use available MCP tools** for deeper analysis and best practice research.
+
+Save output to `.improvement-state/self-learning-suggestions.md`:
+
+```markdown
+# Self-Learning Suggestions
+
+Generated: YYYY-MM-DD HH:MM
+Rounds analyzed: 1-N
+
+## Suggestions
+
+### [IMPACT: HIGH/MEDIUM/LOW] Suggestion title
+- **Current**: Current setting/behavior
+- **Proposed**: Proposed change
+- **Rationale**: Evidence-based reasoning
+- **Action**: Which parameter in `.improvement-config.json` to change
+```
+
+**These suggestions are NOT auto-applied.** The user reviews and manually updates the config.
+
+## Phase 7: Finalize
+
+After all rounds complete (or early termination):
+
+
+1. Output a final summary:
+   ```
+   === Improvement Loop Summary ===
+   Rounds completed: X / {{rounds}}
+   Total issues found: Y
+   Total issues fixed: Z
+   Refactorings applied: W (reverted: V)
+   Branch: $BRANCH
+
+   === Changes Summary ===
+   {output of: git log main..$BRANCH --oneline}
+   {output of: git diff main...$BRANCH --stat}
+   ```
+
+2. **[MANUAL GATE]** Ask the user whether to push the branch:
+   ```
+   Push $BRANCH to origin? The summary above shows all changes.
+   ```
+   - If confirmed: `git push -u origin "$BRANCH"`. Check exit code.
+   - If not confirmed: Keep branch local.
+
+3. Suggest creating a PR (do not auto-create).
+
+## Error Handling
+
+| Situation | Action |
+|-----------|--------|
+| Lint tool not found | Skip lint |
+| Git conflict | **ABORT** the loop (abort condition #1) |
+| Test timeout (exit code 124) | Treat as HIGH-severity issue. If 3+ timeouts in one run, ABORT |
+| 0 issues in all rounds | Report "codebase is in good shape" |
+| MCP server not connected | Log warning, continue without that MCP |
+| /sc: command not installed | Log warning, continue without SuperClaude |
+| Disk space < 500MB | **ABORT** (abort condition #7) |
+| Test count decreased | **ABORT** — potential test file deletion |
