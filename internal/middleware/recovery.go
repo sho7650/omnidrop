@@ -35,7 +35,7 @@ func Recovery(next http.Handler) http.Handler {
 				// Return error response
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(`{"status":"error","message":"internal server error","code":"internal_error"}`))
+				_, _ = w.Write([]byte(`{"status":"error","message":"internal server error","code":"internal_error"}`))
 			}
 		}()
 

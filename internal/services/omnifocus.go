@@ -41,7 +41,11 @@ func (s *OmniFocusService) CreateTask(ctx context.Context, req TaskCreateRequest
 	}
 
 	// Prepare arguments for direct passing to AppleScript
-	tagsString := strings.Join(req.Tags, ",")
+	// Sanitize inputs to prevent AppleScript injection via string terminators
+	title := sanitizeAppleScriptArg(req.Title)
+	note := sanitizeAppleScriptArg(req.Note)
+	project := sanitizeAppleScriptArg(req.Project)
+	tagsString := sanitizeAppleScriptArg(strings.Join(req.Tags, ","))
 
 	// Collect business metrics
 	if req.Project != "" {
@@ -63,7 +67,7 @@ func (s *OmniFocusService) CreateTask(ctx context.Context, req TaskCreateRequest
 	scriptStart := time.Now()
 	
 	// Create command with context for timeout/cancellation
-	cmd := exec.CommandContext(ctx, "osascript", scriptPath, req.Title, req.Note, req.Project, tagsString)
+	cmd := exec.CommandContext(ctx, "osascript", scriptPath, title, note, project, tagsString)
 	output, err := cmd.CombinedOutput()
 	
 	// Record AppleScript execution duration
@@ -157,4 +161,13 @@ func (s *OmniFocusService) isSuccessResult(result string) bool {
 
 	slog.Debug("❌ No success pattern matched", slog.String("result", result))
 	return false
+}
+
+// sanitizeAppleScriptArg removes characters that could be used for AppleScript injection.
+// Since arguments are passed via osascript argv (not shell), the main risk is AppleScript
+// string terminators (double quotes and backslashes) that could break out of string context.
+func sanitizeAppleScriptArg(s string) string {
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "\"", "\\\"")
+	return s
 }

@@ -37,6 +37,9 @@ func (h *Handlers) CreateFile(w http.ResponseWriter, r *http.Request) {
 
 	// Authentication is handled by middleware - no need to re-authenticate here
 
+	// Limit request body size to 10MB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
+
 	// Parse request body
 	var fileReq FileRequest
 	if err := json.NewDecoder(r.Body).Decode(&fileReq); err != nil {

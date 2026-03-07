@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	"omnidrop/internal/config"
 )
 
@@ -62,10 +61,9 @@ func (h *HealthServiceImpl) CheckAppleScriptHealth() HealthResult {
 	// Check if AppleScript file exists and get its path
 	scriptPath, err := h.config.GetAppleScriptPath()
 	if err != nil {
-		wrappedErr := errors.Wrap(err, "AppleScript path resolution failed")
-		result.Errors = append(result.Errors, fmt.Sprintf("AppleScript file not found: %v", wrappedErr))
+		result.Errors = append(result.Errors, fmt.Sprintf("AppleScript file not found: AppleScript path resolution failed: %v", err))
 		result.Details = "AppleScript file not found in expected locations"
-		slog.Error("❌ AppleScript file not found", slog.String("error", wrappedErr.Error()))
+		slog.Error("AppleScript file not found", slog.String("error", err.Error()))
 		return result
 	}
 
@@ -78,10 +76,9 @@ func (h *HealthServiceImpl) CheckAppleScriptHealth() HealthResult {
 
 	output, err := h.testBasicAppleScriptAccess(ctx)
 	if err != nil {
-		wrappedErr := errors.Wrap(err, "AppleScript accessibility test failed")
-		result.Errors = append(result.Errors, fmt.Sprintf("AppleScript test failed: %v", wrappedErr))
+		result.Errors = append(result.Errors, fmt.Sprintf("AppleScript test failed: AppleScript accessibility test failed: %v", err))
 		result.Details = fmt.Sprintf("AppleScript execution failed: %s", string(output))
-		slog.Error("❌ AppleScript test failed", slog.String("error", wrappedErr.Error()))
+		slog.Error("AppleScript test failed", slog.String("error", err.Error()))
 		return result
 	}
 
@@ -106,46 +103,17 @@ func (h *HealthServiceImpl) CheckOmniFocusStatus() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Check if we have a default executor with ExecuteSimple method
-	if executor, ok := h.executor.(*DefaultAppleScriptExecutor); ok {
-		output, err := executor.ExecuteSimple(ctx, "tell application \"System Events\" to get name of processes")
-		if err != nil {
-			wrappedErr := errors.Wrap(err, "failed to query system processes")
-			slog.Error("❌ Failed to check running processes", slog.String("error", wrappedErr.Error()))
-			return false
-		}
-		return strings.Contains(string(output), "OmniFocus")
+	output, err := h.executor.ExecuteSimple(ctx, "tell application \"System Events\" to get name of processes")
+	if err != nil {
+		slog.Error("Failed to check running processes", slog.String("error", err.Error()))
+		return false
 	}
-
-	// For TestExecutor and other mock executors, use ExecuteSimple if available
-	if testExecutor, ok := h.executor.(*TestAppleScriptExecutor); ok {
-		output, err := testExecutor.ExecuteSimple(ctx, "tell application \"System Events\" to get name of processes")
-		if err != nil {
-			wrappedErr := errors.Wrap(err, "test executor failed to query processes")
-			slog.Error("❌ Failed to check running processes", slog.String("error", wrappedErr.Error()))
-			return false
-		}
-		return strings.Contains(string(output), "OmniFocus")
-	}
-
-	// For other mock executors, return false (backward compatibility)
-	return false
+	return strings.Contains(string(output), "OmniFocus")
 }
 
 // testBasicAppleScriptAccess tests basic AppleScript functionality
 func (h *HealthServiceImpl) testBasicAppleScriptAccess(ctx context.Context) ([]byte, error) {
-	// Check if we have a default executor with ExecuteSimple method
-	if executor, ok := h.executor.(*DefaultAppleScriptExecutor); ok {
-		return executor.ExecuteSimple(ctx, "tell application \"System Events\" to get name of processes")
-	}
-
-	// For TestExecutor, use ExecuteSimple method
-	if testExecutor, ok := h.executor.(*TestAppleScriptExecutor); ok {
-		return testExecutor.ExecuteSimple(ctx, "tell application \"System Events\" to get name of processes")
-	}
-
-	// For other executor types (mocks), use the standard Execute method
-	return h.executor.Execute(ctx, "-e", "tell application \"System Events\" to get name of processes")
+	return h.executor.ExecuteSimple(ctx, "tell application \"System Events\" to get name of processes")
 }
 
 // GetWorkingDirectory returns the current working directory (moved from main.go)

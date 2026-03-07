@@ -34,6 +34,7 @@ type HealthService interface {
 // This allows for easy mocking in tests
 type AppleScriptExecutor interface {
 	Execute(ctx context.Context, script string, args ...string) ([]byte, error)
+	ExecuteSimple(ctx context.Context, script string) ([]byte, error)
 }
 
 // HealthResult contains structured health check information

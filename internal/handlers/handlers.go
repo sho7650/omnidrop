@@ -48,6 +48,9 @@ func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
 
 	// Authentication is handled by middleware - no need to re-authenticate here
 
+	// Limit request body size to 1MB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
 	// Parse request body
 	var taskReq TaskRequest
 	if err := json.NewDecoder(r.Body).Decode(&taskReq); err != nil {

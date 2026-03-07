@@ -23,7 +23,8 @@ func (m *MockOmniFocusService) CreateTask(ctx context.Context, req services.Task
 
 // MockAppleScriptExecutor provides a mock implementation for testing
 type MockAppleScriptExecutor struct {
-	ExecuteFunc func(ctx context.Context, script string, args ...string) ([]byte, error)
+	ExecuteFunc       func(ctx context.Context, script string, args ...string) ([]byte, error)
+	ExecuteSimpleFunc func(ctx context.Context, script string) ([]byte, error)
 }
 
 func (m *MockAppleScriptExecutor) Execute(ctx context.Context, script string, args ...string) ([]byte, error) {
@@ -31,6 +32,13 @@ func (m *MockAppleScriptExecutor) Execute(ctx context.Context, script string, ar
 		return m.ExecuteFunc(ctx, script, args...)
 	}
 	return []byte("mock_success"), nil
+}
+
+func (m *MockAppleScriptExecutor) ExecuteSimple(ctx context.Context, script string) ([]byte, error) {
+	if m.ExecuteSimpleFunc != nil {
+		return m.ExecuteSimpleFunc(ctx, script)
+	}
+	return []byte("mock_simple_success"), nil
 }
 
 // MockHealthService provides a mock implementation for testing
