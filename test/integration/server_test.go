@@ -22,7 +22,7 @@ func TestHealthEndpoint(t *testing.T) {
 	// Mock handler for testing
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{
 			"status":  "ok",
 			"version": "test",
 		})

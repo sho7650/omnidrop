@@ -61,11 +61,7 @@ const (
 
 // OAuth error codes as defined in RFC 6749
 const (
-	ErrorInvalidRequest          = "invalid_request"
-	ErrorInvalidClient           = "invalid_client"
-	ErrorInvalidGrant            = "invalid_grant"
-	ErrorUnauthorizedClient      = "unauthorized_client"
-	ErrorUnsupportedGrantType    = "unsupported_grant_type"
-	ErrorInvalidScope            = "invalid_scope"
-	ErrorInsufficientPermissions = "insufficient_permissions"
+	ErrorInvalidRequest       = "invalid_request"
+	ErrorInvalidClient        = "invalid_client"
+	ErrorUnsupportedGrantType = "unsupported_grant_type"
 )

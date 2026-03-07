@@ -65,7 +65,7 @@ func TestFilesEndpoint_Success(t *testing.T) {
 	req := createAuthenticatedRequest(t, server.URL+"/files", payload)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Assert
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -96,7 +96,7 @@ func TestFilesEndpoint_WithDirectory(t *testing.T) {
 	req := createAuthenticatedRequest(t, server.URL+"/files", payload)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Assert
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -125,7 +125,7 @@ func TestFilesEndpoint_AuthenticationError(t *testing.T) {
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Assert
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
@@ -176,7 +176,7 @@ func TestFilesEndpoint_ValidationError(t *testing.T) {
 			req := createAuthenticatedRequest(t, server.URL+"/files", tc.payload)
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 
@@ -203,7 +203,7 @@ func TestFilesEndpoint_MethodNotAllowed(t *testing.T) {
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Assert
 	assert.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)

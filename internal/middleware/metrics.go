@@ -8,7 +8,6 @@ import (
 	"omnidrop/internal/observability"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 )
 
 // responseWriter wraps http.ResponseWriter to capture status code and response size
@@ -67,13 +66,5 @@ func Metrics(next http.Handler) http.Handler {
 		observability.HTTPRequestDuration.WithLabelValues(method, routePattern, status).Observe(duration)
 		observability.HTTPRequestSize.WithLabelValues(method, routePattern).Observe(float64(requestSize))
 		observability.HTTPResponseSize.WithLabelValues(method, routePattern).Observe(float64(wrapped.bytesWritten))
-	})
-}
-
-// WrapHandler wraps chi middleware.WrapResponseWriter with our responseWriter
-func WrapHandler(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		wrapped := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
-		next.ServeHTTP(wrapped, r)
 	})
 }
