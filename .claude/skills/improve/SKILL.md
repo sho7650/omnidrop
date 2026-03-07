@@ -49,6 +49,15 @@ This skill uses the following tools:
 - Follow Conventional Commits commit format.
 - **NEVER weaken or delete tests to make them pass.** Fix the implementation instead.
 
+## Logging (MANDATORY — DO NOT SKIP)
+
+**All commands MUST be run through the wrapper scripts generated in Phase 0.** These scripts embed logging automatically — you do NOT need to call `source log-functions.sh` manually.
+
+- **`.improvement-state/run-cmd.sh <label> <output-file> [timeout] <command...>`** — Runs a command with full execution logging. Use for all test, lint, and typecheck commands.
+- **`.improvement-state/log-event.sh <action> <args...>`** — Logs a single event. Actions: `start`, `end`, `info`, `warn`, `error`, `abort`, `round-start`, `round-end`.
+
+**⚠️ NEVER run test/lint/typecheck commands directly.** Always use `.improvement-state/run-cmd.sh`. If you run commands without the wrapper, `execution.log` will be empty and debugging becomes impossible.
+
 ## Abort Conditions (Loop Stops Entirely)
 
 The loop MUST stop immediately and report to the user if ANY of these occur:
@@ -76,7 +85,7 @@ Action required: {what the user should do}
 1. Verify the working directory is a git repository.
 2. Run `git status` to confirm the working tree is clean.
    - If not clean, warn the user and abort.
-3. Check `timeout` command availability:
+3. Check `timeout` command availability and save to persistent env file:
    ```bash
    if command -v timeout >/dev/null 2>&1; then
      TIMEOUT_CMD="timeout --kill-after=10s"
@@ -86,8 +95,11 @@ Action required: {what the user should do}
      TIMEOUT_CMD=""
      echo "⚠️ timeout command not available — tests will run without timeout protection"
    fi
+   # Persist for use in all subsequent bash blocks
+   mkdir -p .improvement-state
+   echo "TIMEOUT_CMD=\"$TIMEOUT_CMD\"" > .improvement-state/timeout-env.sh
    ```
-   Use `$TIMEOUT_CMD` wherever this skill specifies `timeout --kill-after=10s`.
+   `$TIMEOUT_CMD` is persisted in `.improvement-state/timeout-env.sh` and loaded by `log-functions.sh` automatically.
 4. Confirm the current branch is main.
 5. Create a feature branch:
    ```bash
@@ -118,10 +130,13 @@ print(f'LOG_COMMANDS={str(logging_conf.get(\"include_commands\", True)).lower()}
 #!/bin/bash
 # Logging functions for improvement loop
 
-[ -f .improvement-state/log-env.sh ] && source .improvement-state/log-env.sh
-LOG_FILE="${LOG_FILE:-.improvement-state/execution.log}"
+IMPROVEMENT_STATE_DIR="${IMPROVEMENT_STATE_DIR:-.improvement-state}"
+[ -f "$IMPROVEMENT_STATE_DIR/log-env.sh" ] && source "$IMPROVEMENT_STATE_DIR/log-env.sh"
+[ -f "$IMPROVEMENT_STATE_DIR/timeout-env.sh" ] && source "$IMPROVEMENT_STATE_DIR/timeout-env.sh"
+LOG_FILE="${LOG_FILE:-$IMPROVEMENT_STATE_DIR/execution.log}"
 LOG_LEVEL="${LOG_LEVEL:-INFO}"
 LOG_COMMANDS="${LOG_COMMANDS:-true}"
+TIMEOUT_CMD="${TIMEOUT_CMD:-}"
 
 _log() {
   local level="$1"; shift
@@ -160,38 +175,78 @@ run_logged() {
 }
 LOGEOF
    ```
-9. Initialize execution log:
+9. Generate wrapper scripts (these scripts embed logging so it cannot be skipped):
+   ```bash
+   cat > .improvement-state/run-cmd.sh << 'RUNEOF'
+#!/bin/bash
+# Wrapper: runs a command with full logging to execution.log
+# Usage: .improvement-state/run-cmd.sh <label> <output-file> [timeoutNs] <command...>
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+export IMPROVEMENT_STATE_DIR="$SCRIPT_DIR"
+source "$SCRIPT_DIR/log-functions.sh"
+run_logged "$@"
+RUNEOF
+   chmod +x .improvement-state/run-cmd.sh
+
+   cat > .improvement-state/log-event.sh << 'EVTEOF'
+#!/bin/bash
+# Wrapper: logs a single event to execution.log and/or run.log
+# Usage: .improvement-state/log-event.sh <action> <args...>
+# Actions: start, end, info, warn, error, abort, round-start, round-end
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+export IMPROVEMENT_STATE_DIR="$SCRIPT_DIR"
+source "$SCRIPT_DIR/log-functions.sh"
+RUN_LOG="$SCRIPT_DIR/run.log"
+action="$1"; shift
+case "$action" in
+  start)       log_step_start "$@" ;;
+  end)         log_step_end "$@" ;;
+  info)        log_info "$@" ;;
+  warn)        log_warn "$@" ;;
+  error)       log_error "$@" ;;
+  abort)       log_abort "$@" ;;
+  round-start) echo "" >> "$RUN_LOG"; echo "## Round $1 — $(date '+%Y-%m-%dT%H:%M:%S')" >> "$RUN_LOG" ;;
+  round-end)   echo "Result: $*" >> "$RUN_LOG"; echo "" >> "$RUN_LOG" ;;
+esac
+EVTEOF
+   chmod +x .improvement-state/log-event.sh
+   ```
+10. Initialize execution log:
    ```bash
    echo "=== Improvement Loop Started ===" > .improvement-state/execution.log
    echo "Time: $(date '+%Y-%m-%dT%H:%M:%S')" >> .improvement-state/execution.log
    echo "Parameters: rounds={{rounds}}, focus={{focus}}, dry-run={{dry-run}}" >> .improvement-state/execution.log
    echo "" >> .improvement-state/execution.log
    ```
-10. Initialize the run log:
+11. Initialize the run log:
    ```bash
    echo "# Run Log — $BRANCH" > .improvement-state/run.log
    echo "Started: $(date '+%Y-%m-%dT%H:%M:%S')" >> .improvement-state/run.log
    echo "Parameters: rounds={{rounds}}, focus={{focus}}, dry-run={{dry-run}}" >> .improvement-state/run.log
    ```
-11. Load `.improvement-config.json` if it exists. Otherwise use default values.
-12. **Capture test baseline** — run unit tests to record the initial state:
+12. Load `.improvement-config.json` if it exists. Otherwise use default values.
+13. **Capture test baseline** — run unit tests to record the initial state:
    ```bash
-   source .improvement-state/log-functions.sh
-   run_logged "phase0_test_baseline" ".improvement-state/test-baseline.log" ${TEST_TIMEOUT:-120}s go test ./... 2>&1
+   .improvement-state/run-cmd.sh "phase0_test_baseline" ".improvement-state/test-baseline.log" ${TEST_TIMEOUT:-120}s go test -v ./... 2>&1
    BASELINE_UNIT_EXIT=$?
    ```
    Extract baseline test counts from output. Record: `BASELINE_UNIT_TEST_COUNT`, `BASELINE_UNIT_FAIL_COUNT`.
    These baselines are used throughout the loop to detect regressions.
 13. **Use available MCP servers to understand project structure** — Query semantic analysis tools for module structure, dependency graph, and key entry points.
 
-**Phase 0 complete. Proceed IMMEDIATELY to the Main Loop.**
+**Initialize the round counter:**
+Set `ROUND_NUM=1`. This variable tracks the current round number throughout the loop.
+
+**Phase 0 complete. Proceed IMMEDIATELY to the Main Loop (starting at Phase 1 with ROUND_NUM=1).**
 
 ## Running Tests (Reference)
 
 Whenever this skill says "run tests", follow this procedure:
 
-1. **Wrap with timeout**: `$TIMEOUT_CMD ${TEST_TIMEOUT:-120}s <command> | tee <output-file>`
-   - `$TIMEOUT_CMD` was set in Phase 0. If empty, run the command directly without timeout.
+1. **Always use the wrapper script**: `.improvement-state/run-cmd.sh <label> <output-file> [timeout] <command...>`
+   - Timeout handling, logging, and output capture are built into the wrapper.
+   - Example: `.improvement-state/run-cmd.sh "phase1_unit_test" "/tmp/test-output.log" 120s go test -v ./... 2>&1`
+   - **NEVER run test commands directly without the wrapper.**
 2. **Classify exit code**: 124=timeout (HIGH issue), infrastructure failure patterns (Docker, port, disk) → NOT a test failure, else → actual test failure.
 3. **Parse failures** using go test output patterns (see `references/qa-guide.md` for parsing rules).
 4. **Create a separate issue for EACH failure** with: file, line, test name, error, severity=HIGH.
@@ -201,7 +256,9 @@ Whenever this skill says "run tests", follow this procedure:
 
 ## Main Loop: Round 1 ~ {{rounds}}
 
-Log `[Round N/{{rounds}}]` at the start of each round.
+**Repeat Phase 1 through Phase 5 for each round.** Use `ROUND_NUM` (initialized to 1 in Phase 0) as the current round number. After each round, the "Loop Continuation Decision" section at the end of Phase 5 determines whether to continue, exit, or proceed to finalization.
+
+Log `[Round $ROUND_NUM/{{rounds}}]` at the start of each round.
 
 ### Phase 1: QA (Issue Detection)
 
@@ -209,9 +266,9 @@ Scope: {{focus}}
 
 **Create a savepoint before this round:**
 ```bash
-source .improvement-state/log-functions.sh
-log_step_start "main_loop_round$ROUND_NUM"
-log_info "Creating savepoint for round $ROUND_NUM"
+.improvement-state/log-event.sh round-start "$ROUND_NUM"
+.improvement-state/log-event.sh start "main_loop_round$ROUND_NUM"
+.improvement-state/log-event.sh info "Creating savepoint for round $ROUND_NUM"
 git tag "savepoint-round-$ROUND_NUM"
 ```
 
@@ -220,8 +277,7 @@ Run QA checks. If agent teams are available (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEA
 #### 1-1. Lint (golangci-lint)
 
 ```bash
-source .improvement-state/log-functions.sh
-run_logged "phase1_lint" "/tmp/lint-output.log" golangci-lint run 2>&1
+.improvement-state/run-cmd.sh "phase1_lint" "/tmp/lint-output.log" golangci-lint run 2>&1
 LINT_EXIT=$?
 ```
 
@@ -230,8 +286,7 @@ Extract warnings/errors from output and record as issues.
 #### 1-2. Type Check (go vet)
 
 ```bash
-source .improvement-state/log-functions.sh
-run_logged "phase1_typecheck" "/tmp/typecheck-output.log" go vet ./... 2>&1
+.improvement-state/run-cmd.sh "phase1_typecheck" "/tmp/typecheck-output.log" go vet ./... 2>&1
 TYPECHECK_EXIT=$?
 ```
 
@@ -240,8 +295,7 @@ Record type errors as issues (severity: HIGH — type errors mean compilation fa
 #### 1-3. Unit Tests (go test)
 
 ```bash
-source .improvement-state/log-functions.sh
-run_logged "phase1_unit_test" "/tmp/test-output.log" ${TEST_TIMEOUT:-120}s go test ./... 2>&1
+.improvement-state/run-cmd.sh "phase1_unit_test" "/tmp/test-output.log" ${TEST_TIMEOUT:-120}s go test -v ./... 2>&1
 UNIT_TEST_EXIT=$?
 ```
 
@@ -272,7 +326,7 @@ Use context7 to look up official documentation for chi APIs before flagging pote
 #### Code Review (Claude)
 
 If no SuperClaude `/sc:analyze` is available, perform manual code review:
-- Read source files in cmd,internal
+- Read source files in cmd/,internal/
 - Check for: type safety, error handling, file/function size limits, input validation, hardcoded values, circular dependencies
 - Classify findings by severity: CRITICAL, HIGH, MEDIUM, LOW
 
@@ -312,8 +366,7 @@ Skip this phase if {{dry-run}} is true.
 
 Apply lint auto-fixes first:
 ```bash
-source .improvement-state/log-functions.sh
-run_logged "phase2_lint_fix" "/tmp/lint-fix-output.log" golangci-lint run --fix 2>&1
+.improvement-state/run-cmd.sh "phase2_lint_fix" "/tmp/lint-fix-output.log" golangci-lint run --fix 2>&1
 ```
 
 #### 2-2. Fix Test Failures (HIGHEST PRIORITY)
@@ -336,8 +389,7 @@ Fix procedure:
    - Outdated test → update the test
 4. **Verify the fix** by re-running only that test file:
    ```bash
-   source .improvement-state/log-functions.sh
-   run_logged "phase2_verify_test" "/tmp/single-test-output.log" go test -run {testname} ./...
+   .improvement-state/run-cmd.sh "phase2_verify_test" "/tmp/single-test-output.log" go test -run {testname} ./...
    SINGLE_TEST_EXIT=$?
    ```
    If failures remain, retry (maximum 3 attempts per test). If still failing after 3 attempts, log as "unresolvable" and proceed.
@@ -349,11 +401,10 @@ Prioritize HIGH severity and above. Only fix MEDIUM and below if safe and low-ri
 #### 2-4. Commit
 
 ```bash
-source .improvement-state/log-functions.sh
-log_step_start "phase2_commit"
+.improvement-state/log-event.sh start "phase2_commit"
 git add -A
 git commit -m "fix: resolve N QA issues [round $ROUND_NUM]"
-log_step_end "phase2_commit" "committed"
+.improvement-state/log-event.sh end "phase2_commit" "committed"
 ```
 
 #### 2-5. Post-fix Regression Check (MANDATORY)
@@ -361,18 +412,16 @@ log_step_end "phase2_commit" "committed"
 After committing Phase 2 fixes, run the full test suite:
 
 ```bash
-source .improvement-state/log-functions.sh
-run_logged "phase2_postfix_test" "/tmp/postfix-output.log" ${TEST_TIMEOUT:-120}s go test ./... 2>&1
+.improvement-state/run-cmd.sh "phase2_postfix_test" "/tmp/postfix-output.log" ${TEST_TIMEOUT:-120}s go test -v ./... 2>&1
 POSTFIX_EXIT=$?
 ```
 
 - **All tests pass**: Proceed to Phase 3.
 - **New failures appear** (not in Phase 1 issue list): **Trigger abort condition #4.** Revert:
   ```bash
-  source .improvement-state/log-functions.sh
-  log_error "Phase 2 fix caused regression - reverting"
+  .improvement-state/log-event.sh error "Phase 2 fix caused regression - reverting"
   git revert --no-edit HEAD
-  log_info "Reverted Phase 2 fix commit"
+  .improvement-state/log-event.sh info "Reverted Phase 2 fix commit"
   ```
   Log: "Phase 2 fix caused regression. Reverted." Skip to Phase 5.
 - **Same failures as Phase 1 remain**: Log as "partially fixed", proceed to Phase 3.
@@ -384,8 +433,7 @@ Skip this phase if {{dry-run}} is true.
 **Pre-condition gate (MANDATORY):**
 Run the full test suite:
 ```bash
-source .improvement-state/log-functions.sh
-run_logged "phase3_precondition_test" "/tmp/phase3-precheck-output.log" ${TEST_TIMEOUT:-120}s go test ./... 2>&1
+.improvement-state/run-cmd.sh "phase3_precondition_test" "/tmp/phase3-precheck-output.log" ${TEST_TIMEOUT:-120}s go test -v ./... 2>&1
 PHASE3_PRECHECK_EXIT=$?
 ```
 
@@ -416,11 +464,10 @@ Refactoring candidate selection criteria:
 
 **Commit each refactoring individually:**
 ```bash
-source .improvement-state/log-functions.sh
-log_step_start "phase3_refactor_commit"
+.improvement-state/log-event.sh start "phase3_refactor_commit"
 git add -A
 git commit -m "refactor: {specific description} [round $ROUND_NUM]"
-log_step_end "phase3_refactor_commit" "committed"
+.improvement-state/log-event.sh end "phase3_refactor_commit" "committed"
 ```
 
 ### Phase 4: Safety Check
@@ -430,8 +477,7 @@ Only run if refactoring was performed in Phase 3.
 Unit tests MUST pass for the round to be considered safe.
 
 ```bash
-source .improvement-state/log-functions.sh
-run_logged "phase4_safety_unit_test" "/tmp/safety-unit-output.log" ${TEST_TIMEOUT:-120}s go test ./... 2>&1
+.improvement-state/run-cmd.sh "phase4_safety_unit_test" "/tmp/safety-unit-output.log" ${TEST_TIMEOUT:-120}s go test -v ./... 2>&1
 SAFETY_UNIT_EXIT=$?
 ```
 
@@ -447,39 +493,36 @@ Proceed to Phase 5. Reset `CONSECUTIVE_REVERT_COUNT` to 0.
 Identify and revert Phase 3 refactoring commits using stable SHAs:
 
 ```bash
-source .improvement-state/log-functions.sh
-log_step_start "phase4_auto_revert"
+.improvement-state/log-event.sh start "phase4_auto_revert"
 
 # Collect refactor commit SHAs (newest first)
 REFACTOR_SHAS=$(git log --oneline "savepoint-round-$ROUND_NUM"..HEAD | grep "refactor:.*\[round $ROUND_NUM\]" | awk '{print $1}')
 
 # Revert each (newest first)
 for SHA in $REFACTOR_SHAS; do
-  log_info "Reverting refactor commit $SHA"
+  .improvement-state/log-event.sh info "Reverting refactor commit $SHA"
   if ! git revert --no-edit "$SHA" 2>&1; then
-    log_abort "Revert conflict on $SHA - aborting loop"
+    .improvement-state/log-event.sh abort "Revert conflict on $SHA - aborting loop"
     git revert --abort
     # Trigger abort condition #1 (git conflict)
     exit 1
   fi
 done
-log_step_end "phase4_auto_revert" "reverted"
+.improvement-state/log-event.sh end "phase4_auto_revert" "reverted"
 ```
 
 After revert, re-run tests:
 ```bash
-source .improvement-state/log-functions.sh
-run_logged "phase4_post_revert_test" "/tmp/post-revert-output.log" ${TEST_TIMEOUT:-120}s go test ./... 2>&1
+.improvement-state/run-cmd.sh "phase4_post_revert_test" "/tmp/post-revert-output.log" ${TEST_TIMEOUT:-120}s go test -v ./... 2>&1
 POST_REVERT_EXIT=$?
 ```
 
 - **Tests pass**: Log "Refactoring reverted, tests recovered." Add file + strategy to `.improvement-state/refactor-blocklist.json`. Increment `CONSECUTIVE_REVERT_COUNT`.
 - **Tests still fail**: Revert to the savepoint:
   ```bash
-  source .improvement-state/log-functions.sh
-  log_error "Tests still failing after revert - full round revert"
+  .improvement-state/log-event.sh error "Tests still failing after revert - full round revert"
   git revert --no-edit "savepoint-round-$ROUND_NUM"..HEAD
-  log_info "Full round revert completed"
+  .improvement-state/log-event.sh info "Full round revert completed"
   ```
   Log: "Full round revert."
 
@@ -521,13 +564,29 @@ Append to `.improvement-state/reflection-log.md`:
 
 **End round logging:**
 ```bash
-source .improvement-state/log-functions.sh
-log_step_end "main_loop_round$ROUND_NUM" "issues=$ISSUES_FOUND, fixed=$ISSUES_FIXED"
+.improvement-state/log-event.sh end "main_loop_round$ROUND_NUM" "issues=$ISSUES_FOUND, fixed=$ISSUES_FIXED"
+.improvement-state/log-event.sh round-end "Round $ROUND_NUM: found=$ISSUES_FOUND, fixed=$ISSUES_FIXED"
 ```
+
+### Loop Continuation Decision
+
+**This is the critical loop control point.** After completing Phase 5, decide the next action:
+
+1. **If issues found == 0 in this round**: Exit the loop. Proceed to Phase 7 (Finalize). Log: "No issues found — exiting loop early at round $ROUND_NUM."
+2. **If $ROUND_NUM == {{rounds}}** (maximum rounds reached): Proceed to Phase 6 (Self-Learning), then Phase 7 (Finalize). Log: "Maximum rounds reached."
+3. **Otherwise** (issues remain AND rounds remaining):
+   - Set `ROUND_NUM = ROUND_NUM + 1`
+   - **GO BACK TO "Phase 1: QA (Issue Detection)" above** and execute the entire Phase 1 → 2 → 3 → 4 → 5 sequence again.
+   - Do NOT proceed to Phase 6 or Phase 7.
+   - Log: "Round $ROUND_NUM complete. Issues remain. Proceeding to round $((ROUND_NUM+1))."
+
+**⚠️ CRITICAL: You MUST repeat Phase 1 through Phase 5 for each round. This is a LOOP, not a single pass. Do NOT stop after one round unless exit condition 1 or 2 is met.**
+
+---
 
 ### Phase 6: Self-Learning (Improve the Improvement Process)
 
-**Run ONLY after the final round** (not during intermediate rounds).
+**Run ONLY after the final round** (when exiting the loop due to condition 1 or 2 above).
 
 Analyze all rounds in `.improvement-state/reflection-log.md`:
 - Organize trends in issue count, fix count, and revert rate across rounds
