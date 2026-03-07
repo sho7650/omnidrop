@@ -16,20 +16,8 @@ type ErrorResponse struct {
 	Code    string `json:"code,omitempty"`
 }
 
-// ErrorCode represents different types of application errors
-type ErrorCode string
-
-const (
-	ErrorCodeValidation       ErrorCode = "validation_error"
-	ErrorCodeAuthentication   ErrorCode = "authentication_error"
-	ErrorCodeInternal         ErrorCode = "internal_error"
-	ErrorCodeNotFound         ErrorCode = "not_found"
-	ErrorCodeMethodNotAllowed ErrorCode = "method_not_allowed"
-	ErrorCodeAppleScript      ErrorCode = "applescript_error"
-)
-
 // writeErrorResponse writes a standardized error response with proper logging
-func writeErrorResponse(w http.ResponseWriter, statusCode int, errorCode ErrorCode, message string, err error) {
+func writeErrorResponse(w http.ResponseWriter, statusCode int, errorCode errors.ErrorCode, message string, err error) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 
@@ -68,20 +56,20 @@ func writeErrorResponse(w http.ResponseWriter, statusCode int, errorCode ErrorCo
 
 // writeValidationError writes a validation error response
 func writeValidationError(w http.ResponseWriter, message string) {
-	writeErrorResponse(w, http.StatusBadRequest, ErrorCodeValidation, message, nil)
+	writeErrorResponse(w, http.StatusBadRequest, errors.ErrorCodeValidation, message, nil)
 }
 
 // writeInternalError writes an internal server error response
 func writeInternalError(w http.ResponseWriter, message string, err error) {
-	writeErrorResponse(w, http.StatusInternalServerError, ErrorCodeInternal, message, err)
+	writeErrorResponse(w, http.StatusInternalServerError, errors.ErrorCodeInternal, message, err)
 }
 
 // writeMethodNotAllowedError writes a method not allowed error response
 func writeMethodNotAllowedError(w http.ResponseWriter, message string) {
-	writeErrorResponse(w, http.StatusMethodNotAllowed, ErrorCodeMethodNotAllowed, message, nil)
+	writeErrorResponse(w, http.StatusMethodNotAllowed, errors.ErrorCodeMethodNotAllowed, message, nil)
 }
 
 // writeAppleScriptError writes an AppleScript-specific error response
 func writeAppleScriptError(w http.ResponseWriter, message string, err error) {
-	writeErrorResponse(w, http.StatusInternalServerError, ErrorCodeAppleScript, message, err)
+	writeErrorResponse(w, http.StatusInternalServerError, errors.ErrorCodeAppleScript, message, err)
 }
