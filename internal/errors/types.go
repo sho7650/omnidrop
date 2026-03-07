@@ -30,12 +30,10 @@ const (
 	// Resource errors
 	ErrorCodeNotFound      ErrorCode = "not_found"
 	ErrorCodeAlreadyExists ErrorCode = "already_exists"
-	ErrorCodeConflict      ErrorCode = "conflict"
 
 	// Integration errors
-	ErrorCodeAppleScript    ErrorCode = "applescript_error"
-	ErrorCodeFileSystem     ErrorCode = "filesystem_error"
-	ErrorCodeExternalSystem ErrorCode = "external_system_error"
+	ErrorCodeAppleScript ErrorCode = "applescript_error"
+	ErrorCodeFileSystem  ErrorCode = "filesystem_error"
 
 	// System errors
 	ErrorCodeInternal         ErrorCode = "internal_error"

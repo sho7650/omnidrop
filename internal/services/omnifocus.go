@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	"omnidrop/internal/config"
 	"omnidrop/internal/observability"
 )
@@ -36,7 +35,7 @@ func (s *OmniFocusService) CreateTask(ctx context.Context, req TaskCreateRequest
 		observability.TaskCreationsTotal.WithLabelValues("failure").Inc()
 		return TaskCreateResponse{
 			Status: "error",
-			Reason: fmt.Sprintf("AppleScript path error: %v", errors.Wrap(err, "failed to resolve AppleScript path")),
+			Reason: fmt.Sprintf("failed to resolve AppleScript path: %v", err),
 		}
 	}
 
@@ -82,19 +81,18 @@ func (s *OmniFocusService) CreateTask(ctx context.Context, req TaskCreateRequest
 		observability.AppleScriptErrorsTotal.WithLabelValues(errorType).Inc()
 		observability.AppleScriptExecutionsTotal.WithLabelValues("failure").Inc()
 		
-		wrappedErr := errors.Wrapf(err, "AppleScript execution failed for task '%s'", req.Title)
 		slog.Error("❌ AppleScript execution failed",
 			slog.String("task_title", req.Title),
-			slog.String("error", wrappedErr.Error()),
+			slog.String("error", err.Error()),
 			slog.String("output", string(output)))
-		
+
 		// Record overall task creation duration
 		observability.TaskCreationDuration.Observe(time.Since(start).Seconds())
 		observability.TaskCreationsTotal.WithLabelValues("failure").Inc()
-		
+
 		return TaskCreateResponse{
 			Status: "error",
-			Reason: fmt.Sprintf("AppleScript execution failed: %v - Output: %s", wrappedErr, string(output)),
+			Reason: fmt.Sprintf("AppleScript execution failed for task '%s': %v - Output: %s", req.Title, err, string(output)),
 		}
 	}
 
