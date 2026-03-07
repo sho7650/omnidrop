@@ -11,7 +11,7 @@
 
 **Command**:
 ```bash
-golangci-lint run 2>&1
+golangci-lint run ./... 2>&1
 ```
 
 **Parsing rules**:
@@ -46,16 +46,16 @@ go vet ./... 2>&1
 
 **Command**:
 ```bash
-go test -v ./... 2>&1
+go test ./... 2>&1
 ```
 
-Parse Go test output for failures:
-- Lines starting with `--- FAIL:` indicate individual test failures
+Go test failure patterns:
+- `--- FAIL:` lines indicate individual test failures
 - `panic:` lines indicate runtime panics
-- `FAIL` followed by package name indicates package-level failure
-- `ok` followed by package name indicates package passed
-- Look for the test function name after `--- FAIL:` to identify which test failed
-- Build errors appear as `# package/path` followed by compiler error messages
+- `FAIL` with package name indicates package-level failure
+- `ok` with package name indicates package passed
+- Look for `Error Trace:` and `Error:` lines from testify assertions
+- Summary: count `--- FAIL:` lines for total failures
 
 ### Severity Classification
 
@@ -75,6 +75,8 @@ Parse Go test output for failures:
 - [ ] No circular imports/dependencies
 - [ ] All errors checked (no `_` for error returns)
 - [ ] Context passed to long-running operations
+- [ ] Input validation on all endpoints
+- [ ] Proper auth middleware
 
 ## Issue Aggregation Template
 

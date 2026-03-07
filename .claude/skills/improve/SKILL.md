@@ -227,7 +227,7 @@ EVTEOF
 12. Load `.improvement-config.json` if it exists. Otherwise use default values.
 13. **Capture test baseline** — run unit tests to record the initial state:
    ```bash
-   .improvement-state/run-cmd.sh "phase0_test_baseline" ".improvement-state/test-baseline.log" ${TEST_TIMEOUT:-120}s go test -v ./... 2>&1
+   .improvement-state/run-cmd.sh "phase0_test_baseline" ".improvement-state/test-baseline.log" ${TEST_TIMEOUT:-120}s go test ./... 2>&1
    BASELINE_UNIT_EXIT=$?
    ```
    Extract baseline test counts from output. Record: `BASELINE_UNIT_TEST_COUNT`, `BASELINE_UNIT_FAIL_COUNT`.
@@ -245,7 +245,7 @@ Whenever this skill says "run tests", follow this procedure:
 
 1. **Always use the wrapper script**: `.improvement-state/run-cmd.sh <label> <output-file> [timeout] <command...>`
    - Timeout handling, logging, and output capture are built into the wrapper.
-   - Example: `.improvement-state/run-cmd.sh "phase1_unit_test" "/tmp/test-output.log" 120s go test -v ./... 2>&1`
+   - Example: `.improvement-state/run-cmd.sh "phase1_unit_test" "/tmp/test-output.log" 120s go test ./... 2>&1`
    - **NEVER run test commands directly without the wrapper.**
 2. **Classify exit code**: 124=timeout (HIGH issue), infrastructure failure patterns (Docker, port, disk) → NOT a test failure, else → actual test failure.
 3. **Parse failures** using go test output patterns (see `references/qa-guide.md` for parsing rules).
@@ -277,7 +277,7 @@ Run QA checks. If agent teams are available (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEA
 #### 1-1. Lint (golangci-lint)
 
 ```bash
-.improvement-state/run-cmd.sh "phase1_lint" "/tmp/lint-output.log" golangci-lint run 2>&1
+.improvement-state/run-cmd.sh "phase1_lint" "/tmp/lint-output.log" golangci-lint run ./... 2>&1
 LINT_EXIT=$?
 ```
 
@@ -295,7 +295,7 @@ Record type errors as issues (severity: HIGH — type errors mean compilation fa
 #### 1-3. Unit Tests (go test)
 
 ```bash
-.improvement-state/run-cmd.sh "phase1_unit_test" "/tmp/test-output.log" ${TEST_TIMEOUT:-120}s go test -v ./... 2>&1
+.improvement-state/run-cmd.sh "phase1_unit_test" "/tmp/test-output.log" ${TEST_TIMEOUT:-120}s go test ./... 2>&1
 UNIT_TEST_EXIT=$?
 ```
 
@@ -326,7 +326,7 @@ Use context7 to look up official documentation for chi APIs before flagging pote
 #### Code Review (Claude)
 
 If no SuperClaude `/sc:analyze` is available, perform manual code review:
-- Read source files in cmd/,internal/
+- Read source files in cmd,internal
 - Check for: type safety, error handling, file/function size limits, input validation, hardcoded values, circular dependencies
 - Classify findings by severity: CRITICAL, HIGH, MEDIUM, LOW
 
@@ -366,7 +366,7 @@ Skip this phase if {{dry-run}} is true.
 
 Apply lint auto-fixes first:
 ```bash
-.improvement-state/run-cmd.sh "phase2_lint_fix" "/tmp/lint-fix-output.log" golangci-lint run --fix 2>&1
+.improvement-state/run-cmd.sh "phase2_lint_fix" "/tmp/lint-fix-output.log" none
 ```
 
 #### 2-2. Fix Test Failures (HIGHEST PRIORITY)
@@ -412,7 +412,7 @@ git commit -m "fix: resolve N QA issues [round $ROUND_NUM]"
 After committing Phase 2 fixes, run the full test suite:
 
 ```bash
-.improvement-state/run-cmd.sh "phase2_postfix_test" "/tmp/postfix-output.log" ${TEST_TIMEOUT:-120}s go test -v ./... 2>&1
+.improvement-state/run-cmd.sh "phase2_postfix_test" "/tmp/postfix-output.log" ${TEST_TIMEOUT:-120}s go test ./... 2>&1
 POSTFIX_EXIT=$?
 ```
 
@@ -433,7 +433,7 @@ Skip this phase if {{dry-run}} is true.
 **Pre-condition gate (MANDATORY):**
 Run the full test suite:
 ```bash
-.improvement-state/run-cmd.sh "phase3_precondition_test" "/tmp/phase3-precheck-output.log" ${TEST_TIMEOUT:-120}s go test -v ./... 2>&1
+.improvement-state/run-cmd.sh "phase3_precondition_test" "/tmp/phase3-precheck-output.log" ${TEST_TIMEOUT:-120}s go test ./... 2>&1
 PHASE3_PRECHECK_EXIT=$?
 ```
 
@@ -477,7 +477,7 @@ Only run if refactoring was performed in Phase 3.
 Unit tests MUST pass for the round to be considered safe.
 
 ```bash
-.improvement-state/run-cmd.sh "phase4_safety_unit_test" "/tmp/safety-unit-output.log" ${TEST_TIMEOUT:-120}s go test -v ./... 2>&1
+.improvement-state/run-cmd.sh "phase4_safety_unit_test" "/tmp/safety-unit-output.log" ${TEST_TIMEOUT:-120}s go test ./... 2>&1
 SAFETY_UNIT_EXIT=$?
 ```
 
@@ -513,7 +513,7 @@ done
 
 After revert, re-run tests:
 ```bash
-.improvement-state/run-cmd.sh "phase4_post_revert_test" "/tmp/post-revert-output.log" ${TEST_TIMEOUT:-120}s go test -v ./... 2>&1
+.improvement-state/run-cmd.sh "phase4_post_revert_test" "/tmp/post-revert-output.log" ${TEST_TIMEOUT:-120}s go test ./... 2>&1
 POST_REVERT_EXIT=$?
 ```
 
