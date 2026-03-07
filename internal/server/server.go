@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -29,7 +30,7 @@ type Server struct {
 }
 
 // NewServer creates a new server instance with the given configuration and handlers
-func NewServer(cfg *config.Config, handlers *handlers.Handlers, authMiddleware *auth.Middleware, legacyAuthMiddleware *omnimiddleware.LegacyAuthMiddleware, tokenHandler *auth.TokenHandler, logger *slog.Logger) *Server {
+func NewServer(cfg *config.Config, handlers *handlers.Handlers, authMiddleware *auth.Middleware, legacyAuthMiddleware *omnimiddleware.LegacyAuthMiddleware, tokenHandler *auth.TokenHandler, logger *slog.Logger) (*Server, error) {
 	s := &Server{
 		config:               cfg,
 		handlers:             handlers,
@@ -38,13 +39,15 @@ func NewServer(cfg *config.Config, handlers *handlers.Handlers, authMiddleware *
 		tokenHandler:         tokenHandler,
 		logger:               logger,
 	}
-	s.setupRouter()
+	if err := s.setupRouter(); err != nil {
+		return nil, fmt.Errorf("failed to setup router: %w", err)
+	}
 	s.setupHTTPServer()
-	return s
+	return s, nil
 }
 
 // setupRouter configures the chi router with middleware and routes
-func (s *Server) setupRouter() {
+func (s *Server) setupRouter() error {
 	r := chi.NewRouter()
 
 	// Create logging configuration
@@ -89,11 +92,11 @@ func (s *Server) setupRouter() {
 			r.Post("/files", s.handlers.CreateFile)
 		})
 	} else {
-		// No authentication configured - this should never happen in production
-		panic("FATAL: No authentication middleware configured - server cannot start safely")
+		return fmt.Errorf("no authentication middleware configured - server cannot start safely")
 	}
 
 	s.router = r
+	return nil
 }
 
 // setupHTTPServer configures the HTTP server with appropriate timeouts

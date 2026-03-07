@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"time"
@@ -108,7 +109,10 @@ func (c *Config) validateEnvironment() error {
 	// Protect production script in non-production environments
 	if c.Environment != "production" {
 		homeDir, err := os.UserHomeDir()
-		if err == nil {
+		if err != nil {
+			slog.Warn("Could not determine home directory; skipping production script path protection check",
+				slog.String("error", err.Error()))
+		} else {
 			prodScriptPath := fmt.Sprintf("%s/.local/share/omnidrop/omnidrop.applescript", homeDir)
 			if c.ScriptPath == prodScriptPath {
 				return fmt.Errorf("❌ FATAL: Cannot use production AppleScript in non-production environment")
@@ -220,7 +224,10 @@ func getTokenExpiry() time.Duration {
 	expiryStr := getEnvWithDefault("OMNIDROP_TOKEN_EXPIRY", "24h")
 	expiry, err := time.ParseDuration(expiryStr)
 	if err != nil {
-		return 24 * time.Hour // Default to 24 hours
+		slog.Warn("Invalid OMNIDROP_TOKEN_EXPIRY value; defaulting to 24h",
+			slog.String("value", expiryStr),
+			slog.String("error", err.Error()))
+		return 24 * time.Hour
 	}
 	return expiry
 }

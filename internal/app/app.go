@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -123,7 +124,11 @@ func (a *Application) initialize() error {
 
 	// Initialize handlers and server
 	h := handlers.New(cfg, a.omniFocusService, filesService)
-	a.server = server.NewServer(cfg, h, authMiddleware, legacyAuthMiddleware, tokenHandler, a.logger)
+	srv, err := server.NewServer(cfg, h, authMiddleware, legacyAuthMiddleware, tokenHandler, a.logger)
+	if err != nil {
+		return fmt.Errorf("failed to create server: %w", err)
+	}
+	a.server = srv
 
 	return nil
 }

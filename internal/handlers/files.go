@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -37,8 +38,8 @@ func (h *Handlers) CreateFile(w http.ResponseWriter, r *http.Request) {
 
 	// Authentication is handled by middleware - no need to re-authenticate here
 
-	// Limit request body size to 10MB to prevent memory exhaustion
-	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
+	// Limit request body size to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, MaxFileRequestSize)
 
 	// Parse request body
 	var fileReq FileRequest
@@ -68,9 +69,16 @@ func (h *Handlers) CreateFile(w http.ResponseWriter, r *http.Request) {
 	// Prepare response
 	w.Header().Set("Content-Type", "application/json")
 
-	// Set appropriate HTTP status code
+	// Set appropriate HTTP status code based on error type
 	if response.Status == "error" {
-		w.WriteHeader(http.StatusBadRequest)
+		switch response.ErrorKind {
+		case "conflict":
+			w.WriteHeader(http.StatusConflict)
+		case "internal":
+			w.WriteHeader(http.StatusInternalServerError)
+		default:
+			w.WriteHeader(http.StatusBadRequest)
+		}
 	}
 
 	fileResponse := FileResponse{
@@ -81,6 +89,7 @@ func (h *Handlers) CreateFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewEncoder(w).Encode(fileResponse); err != nil {
-		writeInternalError(w, "Failed to encode response", err)
+		// Headers already sent by Encode's first Write call; cannot change response status
+		slog.Error("Failed to encode file response", slog.String("error", err.Error()))
 	}
 }

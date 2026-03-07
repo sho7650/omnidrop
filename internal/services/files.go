@@ -36,8 +36,9 @@ func (s *FilesService) WriteFile(ctx context.Context, req FileWriteRequest) File
 	if req.Filename == "" {
 		observability.FileCreationsTotal.WithLabelValues("failure").Inc()
 		return FileWriteResponse{
-			Status: "error",
-			Reason: "filename is required and cannot be empty",
+			Status:    "error",
+			Reason:    "filename is required and cannot be empty",
+			ErrorKind: "validation",
 		}
 	}
 
@@ -47,8 +48,9 @@ func (s *FilesService) WriteFile(ctx context.Context, req FileWriteRequest) File
 		observability.FileCreationsTotal.WithLabelValues("failure").Inc()
 		observability.FileCreationDuration.Observe(time.Since(start).Seconds())
 		return FileWriteResponse{
-			Status: "error",
-			Reason: err.Error(),
+			Status:    "error",
+			Reason:    err.Error(),
+			ErrorKind: "validation",
 		}
 	}
 
@@ -57,8 +59,9 @@ func (s *FilesService) WriteFile(ctx context.Context, req FileWriteRequest) File
 		observability.FileCreationsTotal.WithLabelValues("failure").Inc()
 		observability.FileCreationDuration.Observe(time.Since(start).Seconds())
 		return FileWriteResponse{
-			Status: "error",
-			Reason: "file already exists",
+			Status:    "error",
+			Reason:    "file already exists",
+			ErrorKind: "conflict",
 		}
 	}
 
@@ -68,8 +71,9 @@ func (s *FilesService) WriteFile(ctx context.Context, req FileWriteRequest) File
 		observability.FileCreationsTotal.WithLabelValues("failure").Inc()
 		observability.FileCreationDuration.Observe(time.Since(start).Seconds())
 		return FileWriteResponse{
-			Status: "error",
-			Reason: fmt.Sprintf("failed to create directory: %v", err),
+			Status:    "error",
+			Reason:    fmt.Sprintf("failed to create directory: %v", err),
+			ErrorKind: "internal",
 		}
 	}
 
@@ -79,8 +83,9 @@ func (s *FilesService) WriteFile(ctx context.Context, req FileWriteRequest) File
 		observability.FileCreationsTotal.WithLabelValues("failure").Inc()
 		observability.FileCreationDuration.Observe(time.Since(start).Seconds())
 		return FileWriteResponse{
-			Status: "error",
-			Reason: fmt.Sprintf("failed to write file: %v", err),
+			Status:    "error",
+			Reason:    fmt.Sprintf("failed to write file: %v", err),
+			ErrorKind: "internal",
 		}
 	}
 

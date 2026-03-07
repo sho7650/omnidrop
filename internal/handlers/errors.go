@@ -59,11 +59,6 @@ func writeValidationError(w http.ResponseWriter, message string) {
 	writeErrorResponse(w, http.StatusBadRequest, errors.ErrorCodeValidation, message, nil)
 }
 
-// writeInternalError writes an internal server error response
-func writeInternalError(w http.ResponseWriter, message string, err error) {
-	writeErrorResponse(w, http.StatusInternalServerError, errors.ErrorCodeInternal, message, err)
-}
-
 // writeMethodNotAllowedError writes a method not allowed error response
 func writeMethodNotAllowedError(w http.ResponseWriter, message string) {
 	writeErrorResponse(w, http.StatusMethodNotAllowed, errors.ErrorCodeMethodNotAllowed, message, nil)
