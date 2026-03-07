@@ -19,11 +19,11 @@ func setupTestApp(t *testing.T) *app.Application {
 	tempDir := t.TempDir()
 
 	// Set environment variables for testing
-	os.Setenv("TOKEN", "test-token")
-	os.Setenv("PORT", "8788")
-	os.Setenv("OMNIDROP_ENV", "test")
-	os.Setenv("OMNIDROP_FILES_DIR", tempDir)
-	os.Setenv("OMNIDROP_SCRIPT", filepath.Join(tempDir, "test.applescript"))
+	t.Setenv("TOKEN", "test-token")
+	t.Setenv("PORT", "8788")
+	t.Setenv("OMNIDROP_ENV", "test")
+	t.Setenv("OMNIDROP_FILES_DIR", tempDir)
+	t.Setenv("OMNIDROP_SCRIPT", filepath.Join(tempDir, "test.applescript"))
 
 	// Create a dummy AppleScript file for testing
 	scriptContent := `#!/usr/bin/osascript

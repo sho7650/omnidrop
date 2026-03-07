@@ -97,8 +97,7 @@ func TestTaskRequestValidation(t *testing.T) {
 
 func TestEnvironmentVariables(t *testing.T) {
 	// Test that we can read environment variables
-	os.Setenv("TEST_VAR", "test_value")
-	defer os.Unsetenv("TEST_VAR")
+	t.Setenv("TEST_VAR", "test_value")
 
 	value := os.Getenv("TEST_VAR")
 	if value != "test_value" {
