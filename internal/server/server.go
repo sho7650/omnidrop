@@ -133,15 +133,3 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// GetAddress returns the server's listening address
-func (s *Server) GetAddress() string {
-	if s.httpSrv != nil {
-		return s.httpSrv.Addr
-	}
-	return ":" + s.config.Port
-}
-
-// GetRouter returns the configured router (useful for testing)
-func (s *Server) GetRouter() chi.Router {
-	return s.router
-}

@@ -54,36 +54,6 @@ func TestNewServer(t *testing.T) {
 	}
 }
 
-func TestServer_GetAddress(t *testing.T) {
-	cfg := &config.Config{
-		Port:  "8788",
-		Token: "test-token",
-	}
-
-	server := createTestServer(t, cfg)
-
-	expectedAddr := ":8788"
-	actualAddr := server.GetAddress()
-
-	if actualAddr != expectedAddr {
-		t.Errorf("Expected address %s, got %s", expectedAddr, actualAddr)
-	}
-}
-
-func TestServer_GetRouter(t *testing.T) {
-	cfg := &config.Config{
-		Port:  "8788",
-		Token: "test-token",
-	}
-
-	server := createTestServer(t, cfg)
-
-	router := server.GetRouter()
-	if router == nil {
-		t.Error("GetRouter returned nil")
-	}
-}
-
 func TestServer_RouteConfiguration(t *testing.T) {
 	cfg := &config.Config{
 		Port:  "8788",
@@ -92,7 +62,7 @@ func TestServer_RouteConfiguration(t *testing.T) {
 
 	server := createTestServer(t, cfg)
 
-	router := server.GetRouter()
+	router := server.router
 
 	// Test that routes are properly configured by making test requests
 	tests := []struct {
@@ -149,7 +119,7 @@ func TestServer_MiddlewareConfiguration(t *testing.T) {
 
 	server := createTestServer(t, cfg)
 
-	router := server.GetRouter()
+	router := server.router
 
 	// Test that middleware is working by checking headers
 	req := httptest.NewRequest("GET", "/health", nil)
@@ -228,7 +198,7 @@ func TestServer_Integration(t *testing.T) {
 	server := createTestServer(t, cfg)
 
 	// Test that the server can be used with httptest.Server
-	testServer := httptest.NewServer(server.GetRouter())
+	testServer := httptest.NewServer(server.router)
 	defer testServer.Close()
 
 	// Test health endpoint

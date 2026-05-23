@@ -29,14 +29,6 @@ type Application struct {
 	buildTime        string
 }
 
-// New creates a new application instance
-func New() *Application {
-	return &Application{
-		version:   "dev",
-		buildTime: "unknown",
-	}
-}
-
 // NewWithVersion creates a new application instance with version information
 func NewWithVersion(version, buildTime string) *Application {
 	return &Application{
@@ -195,22 +187,3 @@ func (a *Application) shutdown() error {
 	return nil
 }
 
-// GetConfig returns the application configuration (useful for testing)
-func (a *Application) GetConfig() *config.Config {
-	return a.config
-}
-
-// GetServer returns the server instance (useful for testing)
-func (a *Application) GetServer() *server.Server {
-	return a.server
-}
-
-// GetHealthService returns the health service (useful for testing)
-func (a *Application) GetHealthService() services.HealthService {
-	return a.healthService
-}
-
-// GetOmniFocusService returns the OmniFocus service (useful for testing)
-func (a *Application) GetOmniFocusService() services.OmniFocusServiceInterface {
-	return a.omniFocusService
-}

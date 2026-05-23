@@ -8,21 +8,6 @@ import (
 	"omnidrop/internal/observability"
 )
 
-func TestNew(t *testing.T) {
-	app := New()
-	if app == nil {
-		t.Fatal("New() returned nil")
-	}
-
-	if app.version != "dev" {
-		t.Errorf("Expected version 'dev', got %s", app.version)
-	}
-
-	if app.buildTime != "unknown" {
-		t.Errorf("Expected buildTime 'unknown', got %s", app.buildTime)
-	}
-}
-
 func TestNewWithVersion(t *testing.T) {
 	version := "1.0.0"
 	buildTime := "2025-09-15T19:00:00Z"
@@ -48,7 +33,7 @@ func TestApplication_Initialize(t *testing.T) {
 	t.Setenv("OMNIDROP_ENV", "test")
 	t.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 
-	app := New()
+	app := NewWithVersion("dev", "unknown")
 	app.logger = observability.SetupLogger() // Setup logger before initialize
 	err := app.initialize()
 
@@ -79,7 +64,7 @@ func TestApplication_Initialize_ConfigError(t *testing.T) {
 	t.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 	t.Setenv("TOKEN", "")
 
-	app := New()
+	app := NewWithVersion("dev", "unknown")
 	app.logger = observability.SetupLogger() // Setup logger before initialize
 	err := app.initialize()
 
@@ -95,28 +80,25 @@ func TestApplication_GetMethods(t *testing.T) {
 	t.Setenv("OMNIDROP_ENV", "test")
 	t.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 
-	app := New()
+	app := NewWithVersion("dev", "unknown")
 	app.logger = observability.SetupLogger() // Setup logger before initialize
 	err := app.initialize()
 	if err != nil {
 		t.Fatalf("initialize() failed: %v", err)
 	}
 
-	// Test getter methods
-	if app.GetConfig() == nil {
-		t.Error("GetConfig() returned nil")
+	// Inspect the components directly — this test lives in the same package.
+	if app.config == nil {
+		t.Error("config not set")
 	}
-
-	if app.GetServer() == nil {
-		t.Error("GetServer() returned nil")
+	if app.server == nil {
+		t.Error("server not set")
 	}
-
-	if app.GetHealthService() == nil {
-		t.Error("GetHealthService() returned nil")
+	if app.healthService == nil {
+		t.Error("healthService not set")
 	}
-
-	if app.GetOmniFocusService() == nil {
-		t.Error("GetOmniFocusService() returned nil")
+	if app.omniFocusService == nil {
+		t.Error("omniFocusService not set")
 	}
 }
 
@@ -146,7 +128,7 @@ func TestApplication_PerformHealthChecks(t *testing.T) {
 	t.Setenv("OMNIDROP_ENV", "test")
 	t.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 
-	app := New()
+	app := NewWithVersion("dev", "unknown")
 	app.logger = observability.SetupLogger() // Setup logger before initialize
 
 	err := app.initialize()
@@ -165,7 +147,7 @@ func TestApplication_Shutdown(t *testing.T) {
 	t.Setenv("OMNIDROP_ENV", "test")
 	t.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 
-	app := New()
+	app := NewWithVersion("dev", "unknown")
 	app.logger = observability.SetupLogger() // Setup logger before initialize
 
 	err := app.initialize()
@@ -188,7 +170,7 @@ func TestApplication_Lifecycle(t *testing.T) {
 	t.Setenv("OMNIDROP_ENV", "test")
 	t.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 
-	app := New()
+	app := NewWithVersion("dev", "unknown")
 	app.logger = observability.SetupLogger() // Setup logger before initialize
 
 	// Test initialization
@@ -223,7 +205,7 @@ func TestApplication_RunBasicFlow(t *testing.T) {
 	t.Setenv("OMNIDROP_ENV", "test")
 	t.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
 
-	app := New()
+	app := NewWithVersion("dev", "unknown")
 
 	// Test that initialization works as part of Run()
 	go func() {
