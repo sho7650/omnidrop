@@ -37,21 +37,11 @@ func NewMiddleware(jwtManager *JWTManager, logger *slog.Logger) *Middleware {
 	}
 }
 
-// Authenticate is the main authentication middleware
+// Authenticate is the main authentication middleware. It is mounted only on
+// the protected /tasks and /files routes via chi r.Group(), so it never sees
+// /oauth/token, /health, or /metrics — no path-skip logic needed here.
 func (m *Middleware) Authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Skip OAuth endpoint itself
-		if r.URL.Path == "/oauth/token" {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		// Skip health and metrics endpoints (public)
-		if r.URL.Path == "/health" || r.URL.Path == "/metrics" {
-			next.ServeHTTP(w, r)
-			return
-		}
-
 		// Extract Authorization header
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {

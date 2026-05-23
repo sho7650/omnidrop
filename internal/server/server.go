@@ -50,16 +50,13 @@ func NewServer(cfg *config.Config, handlers *handlers.Handlers, authMiddleware *
 func (s *Server) setupRouter() error {
 	r := chi.NewRouter()
 
-	// Create logging configuration
-	loggingCfg := omnimiddleware.DefaultLoggingConfig(s.logger)
-
 	// Middleware stack (order matters!)
-	r.Use(omnimiddleware.Recovery)              // Panic recovery (first for safety)
-	r.Use(omnimiddleware.RequestIDMiddleware)   // Request ID generation
-	r.Use(middleware.RealIP)                    // Real IP detection
-	r.Use(omnimiddleware.HTTPLogging(loggingCfg)) // Structured logging
-	r.Use(omnimiddleware.Metrics)               // Prometheus metrics collection
-	r.Use(middleware.Timeout(60 * time.Second)) // Request timeout
+	r.Use(omnimiddleware.Recovery)                // Panic recovery (first for safety)
+	r.Use(omnimiddleware.RequestIDMiddleware)     // Request ID generation
+	r.Use(middleware.RealIP)                      // Real IP detection
+	r.Use(omnimiddleware.HTTPLogging(s.logger))   // Structured logging
+	r.Use(omnimiddleware.Metrics)                 // Prometheus metrics collection
+	r.Use(middleware.Timeout(60 * time.Second))   // Request timeout
 
 	// Public routes (no authentication required)
 	r.Get("/health", s.handlers.Health)

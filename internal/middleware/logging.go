@@ -8,50 +8,18 @@ import (
 	sloghttp "github.com/samber/slog-http"
 )
 
-// LoggingConfig holds configuration for HTTP logging middleware
-type LoggingConfig struct {
-	Logger         *slog.Logger
-	WithRequestID  bool
-	WithBody       bool
-	WithHeaders    bool
-	SkipPaths      []string
-	ClientErrorLevel slog.Level
-	ServerErrorLevel slog.Level
-}
-
-// DefaultLoggingConfig returns sensible defaults for HTTP logging
-func DefaultLoggingConfig(logger *slog.Logger) LoggingConfig {
-	return LoggingConfig{
-		Logger:           logger,
-		WithRequestID:    true,
-		WithBody:         false, // Disable by default for security
-		WithHeaders:      false, // Disable by default for security
-		SkipPaths:        []string{"/health", "/metrics"},
+// HTTPLogging returns a middleware that logs HTTP requests using structured logging.
+// /health and /metrics are skipped to keep poller traffic out of the log.
+func HTTPLogging(logger *slog.Logger) func(http.Handler) http.Handler {
+	return sloghttp.NewWithConfig(logger, sloghttp.Config{
+		DefaultLevel:     slog.LevelInfo,
 		ClientErrorLevel: slog.LevelWarn,
 		ServerErrorLevel: slog.LevelError,
-	}
-}
-
-// HTTPLogging returns a middleware that logs HTTP requests using structured logging
-func HTTPLogging(cfg LoggingConfig) func(http.Handler) http.Handler {
-	config := sloghttp.Config{
-		DefaultLevel:     slog.LevelInfo,
-		ClientErrorLevel: cfg.ClientErrorLevel,
-		ServerErrorLevel: cfg.ServerErrorLevel,
-
-		WithRequestID:      cfg.WithRequestID,
-		WithRequestBody:    cfg.WithBody,
-		WithRequestHeader:  cfg.WithHeaders,
-		WithResponseBody:   cfg.WithBody,
-		WithResponseHeader: cfg.WithHeaders,
-
+		WithRequestID:    true,
 		Filters: []sloghttp.Filter{
-			// Skip health check and metrics endpoints
-			sloghttp.IgnorePath(cfg.SkipPaths...),
+			sloghttp.IgnorePath("/health", "/metrics"),
 		},
-	}
-
-	return sloghttp.NewWithConfig(cfg.Logger, config)
+	})
 }
 
 // RequestIDMiddleware adds a unique X-Request-ID response header for debugging.

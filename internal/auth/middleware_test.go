@@ -78,52 +78,6 @@ func TestNewMiddleware(t *testing.T) {
 	}
 }
 
-// TestMiddleware_Authenticate_PublicEndpoints tests that public endpoints are skipped
-func TestMiddleware_Authenticate_PublicEndpoints(t *testing.T) {
-	tests := []struct {
-		name     string
-		path     string
-		expected int
-	}{
-		{
-			name:     "skips /oauth/token endpoint",
-			path:     "/oauth/token",
-			expected: http.StatusOK,
-		},
-		{
-			name:     "skips /health endpoint",
-			path:     "/health",
-			expected: http.StatusOK,
-		},
-		{
-			name:     "skips /metrics endpoint",
-			path:     "/metrics",
-			expected: http.StatusOK,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			jm := newTestJWTManager()
-			logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-			m := NewMiddleware(jm, logger)
-
-			// Create test handler that returns OK
-			nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-			})
-
-			// Create request without any auth header
-			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
-			rec := httptest.NewRecorder()
-
-			m.Authenticate(nextHandler).ServeHTTP(rec, req)
-
-			assert.Equal(t, tt.expected, rec.Code, "public endpoint should be accessible without auth")
-		})
-	}
-}
-
 // TestMiddleware_Authenticate_OAuth tests OAuth authentication
 func TestMiddleware_Authenticate_OAuth(t *testing.T) {
 	jm := newTestJWTManager()
