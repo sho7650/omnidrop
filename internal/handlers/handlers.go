@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"omnidrop/internal/config"
 	"omnidrop/internal/services"
 )
 
@@ -32,14 +31,14 @@ type TaskResponse struct {
 }
 
 type Handlers struct {
-	cfg              *config.Config
+	version          string
 	omniFocusService services.OmniFocusServiceInterface
 	filesService     services.FilesServiceInterface
 }
 
-func New(cfg *config.Config, omniFocusService services.OmniFocusServiceInterface, filesService services.FilesServiceInterface) *Handlers {
+func New(version string, omniFocusService services.OmniFocusServiceInterface, filesService services.FilesServiceInterface) *Handlers {
 	return &Handlers{
-		cfg:              cfg,
+		version:          version,
 		omniFocusService: omniFocusService,
 		filesService:     filesService,
 	}
@@ -103,14 +102,9 @@ func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]string{
 		"status":  "ok",
-		"version": h.getVersion(),
+		"version": h.version,
 	}); err != nil {
 		// Headers already sent by Encode's first Write call; cannot change response status
 		slog.Error("Failed to encode health response", slog.String("error", err.Error()))
 	}
-}
-
-// getVersion returns the version - will be set via ldflags during build
-func (h *Handlers) getVersion() string {
-	return "dev" // This will be replaced by build-time variables
 }

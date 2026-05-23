@@ -19,7 +19,7 @@ func createTestServer(t *testing.T, cfg *config.Config) *Server {
 	t.Helper()
 	mockOmniFocusService := &mocks.MockOmniFocusService{}
 	mockFilesService := &mocks.MockFilesService{}
-	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
+	h := handlers.New("test", mockOmniFocusService, mockFilesService)
 	logger := observability.SetupLogger()
 	legacyAuth := middleware.NewLegacyAuthMiddleware(cfg.Token, logger)
 	srv, err := NewServer(cfg, h, nil, legacyAuth, nil, logger)

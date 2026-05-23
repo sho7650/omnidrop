@@ -115,7 +115,7 @@ func (a *Application) initialize() error {
 	filesService := services.NewFilesService(cfg)
 
 	// Initialize handlers and server
-	h := handlers.New(cfg, a.omniFocusService, filesService)
+	h := handlers.New(a.version, a.omniFocusService, filesService)
 	srv, err := server.NewServer(cfg, h, authMiddleware, legacyAuthMiddleware, tokenHandler, a.logger)
 	if err != nil {
 		return fmt.Errorf("failed to create server: %w", err)
