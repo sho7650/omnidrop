@@ -5,7 +5,6 @@ import (
 	"crypto/subtle"
 	"log/slog"
 	"net/http"
-	"os"
 	"strings"
 
 	"omnidrop/internal/observability"
@@ -13,18 +12,16 @@ import (
 
 // Middleware provides OAuth authentication middleware
 type Middleware struct {
-	jwtManager       *JWTManager
-	logger           *slog.Logger
+	jwtManager        *JWTManager
+	logger            *slog.Logger
 	legacyAuthEnabled bool
-	legacyToken      string
+	legacyToken       string
 }
 
-// NewMiddleware creates a new OAuth middleware
-func NewMiddleware(jwtManager *JWTManager, logger *slog.Logger) *Middleware {
-	// Check for legacy auth support
-	legacyEnabled := os.Getenv("OMNIDROP_LEGACY_AUTH_ENABLED") == "true"
-	legacyToken := os.Getenv("TOKEN")
-
+// NewMiddleware creates a new OAuth middleware. Legacy hybrid mode (accept
+// both OAuth tokens and a fixed legacy bearer token) is activated only when
+// the caller passes legacyEnabled=true with a non-empty legacyToken.
+func NewMiddleware(jwtManager *JWTManager, logger *slog.Logger, legacyEnabled bool, legacyToken string) *Middleware {
 	if legacyEnabled && legacyToken != "" {
 		logger.Warn("Legacy authentication is enabled - this should only be used during migration")
 	}

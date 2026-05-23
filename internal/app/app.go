@@ -84,8 +84,8 @@ func (a *Application) initialize() error {
 			// Initialize JWT manager
 			jwtManager = auth.NewJWTManager(cfg.JWTSecret)
 
-			// Initialize OAuth middleware
-			authMiddleware = auth.NewMiddleware(jwtManager, a.logger)
+			// Initialize OAuth middleware (hybrid legacy fallback is wired from config)
+			authMiddleware = auth.NewMiddleware(jwtManager, a.logger, cfg.LegacyAuthEnabled, cfg.Token)
 
 			// Initialize token handler
 			tokenHandler = auth.NewTokenHandler(oauthRepo, jwtManager, cfg.TokenExpiry, a.logger)

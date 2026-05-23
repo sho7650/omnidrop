@@ -15,51 +15,37 @@ import (
 // TestNewMiddleware tests middleware creation
 func TestNewMiddleware(t *testing.T) {
 	tests := []struct {
-		name              string
-		legacyEnabled     string
-		legacyToken       string
-		expectLegacy      bool
+		name          string
+		legacyEnabled bool
+		legacyToken   string
+		expectLegacy  bool
 	}{
 		{
 			name:          "creates middleware without legacy auth",
-			legacyEnabled: "",
+			legacyEnabled: false,
 			legacyToken:   "",
 			expectLegacy:  false,
 		},
 		{
 			name:          "creates middleware with legacy auth enabled",
-			legacyEnabled: "true",
+			legacyEnabled: true,
 			legacyToken:   "test-legacy-token",
 			expectLegacy:  true,
 		},
 		{
 			name:          "legacy auth disabled when flag is false",
-			legacyEnabled: "false",
+			legacyEnabled: false,
 			legacyToken:   "test-legacy-token",
-			expectLegacy:  false,
-		},
-		{
-			name:          "legacy auth disabled when token is empty",
-			legacyEnabled: "true",
-			legacyToken:   "",
 			expectLegacy:  false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set environment variables
-			if tt.legacyEnabled != "" {
-				t.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", tt.legacyEnabled)
-			}
-			if tt.legacyToken != "" {
-				t.Setenv("TOKEN", tt.legacyToken)
-			}
-
 			jm := newTestJWTManager()
 			logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
-			m := NewMiddleware(jm, logger)
+			m := NewMiddleware(jm, logger, tt.legacyEnabled, tt.legacyToken)
 
 			assert.NotNil(t, m)
 			assert.NotNil(t, m.jwtManager)
@@ -69,10 +55,7 @@ func TestNewMiddleware(t *testing.T) {
 				assert.True(t, m.legacyAuthEnabled, "expected legacy auth to be enabled")
 				assert.Equal(t, tt.legacyToken, m.legacyToken)
 			} else {
-				// Either disabled flag or empty token results in no legacy auth
-				if tt.legacyEnabled != "true" {
-					assert.False(t, m.legacyAuthEnabled)
-				}
+				assert.False(t, m.legacyAuthEnabled)
 			}
 		})
 	}
@@ -82,7 +65,7 @@ func TestNewMiddleware(t *testing.T) {
 func TestMiddleware_Authenticate_OAuth(t *testing.T) {
 	jm := newTestJWTManager()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewMiddleware(jm, logger)
+	m := NewMiddleware(jm, logger, false, "")
 
 	client := newTestOAuthClient("test-client", []string{"tasks:write", "files:read"})
 	validToken := generateValidToken(t, jm, client)
@@ -172,7 +155,7 @@ func TestMiddleware_Authenticate_OAuth(t *testing.T) {
 func TestMiddleware_Authenticate_ExpiredToken(t *testing.T) {
 	jm := newTestJWTManager()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewMiddleware(jm, logger)
+	m := NewMiddleware(jm, logger, false, "")
 
 	client := newTestOAuthClient("test-client", []string{"tasks:write"})
 	expiredToken := generateExpiredToken(t, jm, client)
@@ -229,15 +212,9 @@ func TestMiddleware_Authenticate_LegacyAuth(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set environment for legacy auth
-			if tt.legacyEnabled {
-				t.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
-			}
-			t.Setenv("TOKEN", tt.legacyToken)
-
 			jm := newTestJWTManager()
 			logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-			m := NewMiddleware(jm, logger)
+			m := NewMiddleware(jm, logger, tt.legacyEnabled, tt.legacyToken)
 
 			var capturedClaims *Claims
 
@@ -268,12 +245,9 @@ func TestMiddleware_Authenticate_LegacyAuth(t *testing.T) {
 
 // TestMiddleware_Authenticate_LegacyIsolation tests that OAuth takes precedence over legacy
 func TestMiddleware_Authenticate_LegacyIsolation(t *testing.T) {
-	t.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
-	t.Setenv("TOKEN", testLegacyToken)
-
 	jm := newTestJWTManager()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewMiddleware(jm, logger)
+	m := NewMiddleware(jm, logger, true, testLegacyToken)
 
 	// Create a valid OAuth token
 	client := newTestOAuthClient("oauth-client", []string{"admin:*"})
@@ -304,7 +278,7 @@ func TestMiddleware_Authenticate_LegacyIsolation(t *testing.T) {
 func TestMiddleware_Authenticate_HeaderInjection(t *testing.T) {
 	jm := newTestJWTManager()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewMiddleware(jm, logger)
+	m := NewMiddleware(jm, logger, false, "")
 
 	tests := []struct {
 		name       string
@@ -346,7 +320,7 @@ func TestMiddleware_Authenticate_HeaderInjection(t *testing.T) {
 func TestMiddleware_Authenticate_ContextIntegrity(t *testing.T) {
 	jm := newTestJWTManager()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewMiddleware(jm, logger)
+	m := NewMiddleware(jm, logger, false, "")
 
 	// Pre-populate context with existing claims (simulating a previous request)
 	existingClaims := &Claims{ClientID: "existing-client", Scopes: []string{"old:scope"}}
