@@ -183,7 +183,7 @@ func TestMiddleware_Authenticate_OAuth(t *testing.T) {
 
 			nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if tt.checkClaims {
-					claims, ok := GetClaims(r)
+					claims, ok := r.Context().Value(ContextKeyClaims).(*Claims)
 					require.True(t, ok, "claims should be in context")
 					capturedClaims = claims
 				}
@@ -288,7 +288,7 @@ func TestMiddleware_Authenticate_LegacyAuth(t *testing.T) {
 			var capturedClaims *Claims
 
 			nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				claims, ok := GetClaims(r)
+				claims, ok := r.Context().Value(ContextKeyClaims).(*Claims)
 				if ok {
 					capturedClaims = claims
 				}
@@ -328,7 +328,7 @@ func TestMiddleware_Authenticate_LegacyIsolation(t *testing.T) {
 	var capturedClaims *Claims
 
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		claims, _ := GetClaims(r)
+		claims, _ := r.Context().Value(ContextKeyClaims).(*Claims)
 		capturedClaims = claims
 		w.WriteHeader(http.StatusOK)
 	})
@@ -506,58 +506,4 @@ func TestRequireScopes_NoClaims(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code, "should return 401 when no claims in context")
 }
 
-// TestGetClaims tests extracting claims from request context
-func TestGetClaims(t *testing.T) {
-	tests := []struct {
-		name          string
-		setupContext  func(*http.Request) *http.Request
-		expectClaims  bool
-		expectedID    string
-	}{
-		{
-			name: "extracts claims from valid context",
-			setupContext: func(r *http.Request) *http.Request {
-				claims := &Claims{ClientID: "test-client", Scopes: []string{"tasks:write"}}
-				ctx := context.WithValue(r.Context(), ContextKeyClaims, claims)
-				return r.WithContext(ctx)
-			},
-			expectClaims: true,
-			expectedID:   "test-client",
-		},
-		{
-			name: "returns false when no claims in context",
-			setupContext: func(r *http.Request) *http.Request {
-				return r
-			},
-			expectClaims: false,
-			expectedID:   "",
-		},
-		{
-			name: "returns false when wrong type in context",
-			setupContext: func(r *http.Request) *http.Request {
-				ctx := context.WithValue(r.Context(), ContextKeyClaims, "not-a-claims-struct")
-				return r.WithContext(ctx)
-			},
-			expectClaims: false,
-			expectedID:   "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/tasks", nil)
-			req = tt.setupContext(req)
-
-			claims, ok := GetClaims(req)
-
-			assert.Equal(t, tt.expectClaims, ok)
-			if tt.expectClaims {
-				require.NotNil(t, claims)
-				assert.Equal(t, tt.expectedID, claims.ClientID)
-			} else {
-				assert.Nil(t, claims)
-			}
-		})
-	}
-}
 

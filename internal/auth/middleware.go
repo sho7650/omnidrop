@@ -188,9 +188,3 @@ func (m *Middleware) respondUnauthorized(w http.ResponseWriter, message string) 
 func respondForbidden(w http.ResponseWriter, message string) {
 	http.Error(w, message, http.StatusForbidden)
 }
-
-// GetClaims extracts OAuth claims from request context
-func GetClaims(r *http.Request) (*Claims, bool) {
-	claims, ok := r.Context().Value(ContextKeyClaims).(*Claims)
-	return claims, ok
-}

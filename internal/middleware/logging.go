@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"context"
 	"log/slog"
 	"net/http"
 
@@ -55,27 +54,11 @@ func HTTPLogging(cfg LoggingConfig) func(http.Handler) http.Handler {
 	return sloghttp.NewWithConfig(cfg.Logger, config)
 }
 
-// contextKey is a private type for context keys defined in this package to avoid collisions.
-type contextKey string
-
-const (
-	// ContextKeyRequestID is the context key for request IDs.
-	ContextKeyRequestID contextKey = "request_id"
-)
-
-// RequestIDMiddleware adds a unique request ID to each request
+// RequestIDMiddleware adds a unique X-Request-ID response header for debugging.
 func RequestIDMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestID := generateRequestID()
-
-		// Add request ID to response header for debugging
-		w.Header().Set("X-Request-ID", requestID)
-
-		// Add request ID to request context
-		ctx := r.Context()
-		ctx = context.WithValue(ctx, ContextKeyRequestID, requestID)
-
-		next.ServeHTTP(w, r.WithContext(ctx))
+		w.Header().Set("X-Request-ID", generateRequestID())
+		next.ServeHTTP(w, r)
 	})
 }
 

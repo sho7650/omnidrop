@@ -221,51 +221,6 @@ func TestRepository_Authenticate(t *testing.T) {
 	}
 }
 
-// TestRepository_List tests listing all active clients
-func TestRepository_List(t *testing.T) {
-	hashedSecret := hashPassword(t, "test-secret")
-	clients := []OAuthClient{
-		{
-			ClientID:         "client-a",
-			ClientSecretHash: hashedSecret,
-			Name:             "Client A",
-			Scopes:           []string{"tasks:write"},
-			Disabled:         false,
-		},
-		{
-			ClientID:         "client-b",
-			ClientSecretHash: hashedSecret,
-			Name:             "Client B",
-			Scopes:           []string{"files:read"},
-			Disabled:         false,
-		},
-		{
-			ClientID:         "disabled-client",
-			ClientSecretHash: hashedSecret,
-			Name:             "Disabled Client",
-			Scopes:           []string{"admin:*"},
-			Disabled:         true,
-		},
-	}
-
-	repo, cleanup := createTestRepository(t, clients)
-	defer cleanup()
-
-	activeClients := repo.List()
-
-	// Should only return active clients (not disabled)
-	assert.Len(t, activeClients, 2)
-
-	clientIDs := make([]string, 0, len(activeClients))
-	for _, c := range activeClients {
-		clientIDs = append(clientIDs, c.ClientID)
-	}
-
-	assert.Contains(t, clientIDs, "client-a")
-	assert.Contains(t, clientIDs, "client-b")
-	assert.NotContains(t, clientIDs, "disabled-client")
-}
-
 // TestRepository_Load tests configuration loading
 func TestRepository_Load(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -303,13 +258,14 @@ func TestRepository_Load(t *testing.T) {
     scopes:
       - files:read
 `
-	// Wait a moment to ensure file modification time changes
-	time.Sleep(10 * time.Millisecond)
 	err = os.WriteFile(configPath, []byte(updatedConfig), 0600)
 	require.NoError(t, err)
 
-	// Force reload
-	err = repo.Reload()
+	// Force mtime past the current second boundary — Load() compares at Unix() second granularity
+	future := time.Now().Add(2 * time.Second)
+	require.NoError(t, os.Chtimes(configPath, future, future))
+
+	err = repo.Load()
 	require.NoError(t, err)
 
 	// Verify new client is available
@@ -399,9 +355,8 @@ func TestRepository_EmptyConfig(t *testing.T) {
 	repo, err := NewRepository(configPath)
 	require.NoError(t, err)
 
-	// List should return empty
-	clients := repo.List()
-	assert.Empty(t, clients)
+	// Repository should have no clients loaded
+	assert.Empty(t, repo.clients)
 
 	// GetByClientID should return not found
 	_, err = repo.GetByClientID("any-client")
@@ -422,59 +377,10 @@ func TestRepository_CreateEmptyConfig(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Repository should work with empty config
-	clients := repo.List()
-	assert.Empty(t, clients)
+	assert.Empty(t, repo.clients)
 
 	_, err = repo.GetByClientID("any-client")
 	assert.ErrorIs(t, err, ErrClientNotFound)
-}
-
-// TestRepository_Reload tests forced reload
-func TestRepository_Reload(t *testing.T) {
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "oauth-clients.yaml")
-
-	config := `clients:
-  - client_id: client-v1
-    client_secret_hash: $2a$10$test
-    name: Client V1
-    scopes:
-      - tasks:write
-`
-	err := os.WriteFile(configPath, []byte(config), 0600)
-	require.NoError(t, err)
-
-	repo, err := NewRepository(configPath)
-	require.NoError(t, err)
-
-	// Verify initial client
-	client, err := repo.GetByClientID("client-v1")
-	assert.NoError(t, err)
-	assert.Equal(t, "Client V1", client.Name)
-
-	// Update config (same timestamp to test Reload resets lastModified)
-	updatedConfig := `clients:
-  - client_id: client-v2
-    client_secret_hash: $2a$10$test
-    name: Client V2
-    scopes:
-      - files:read
-`
-	err = os.WriteFile(configPath, []byte(updatedConfig), 0600)
-	require.NoError(t, err)
-
-	// Force reload
-	err = repo.Reload()
-	require.NoError(t, err)
-
-	// Old client should not exist
-	_, err = repo.GetByClientID("client-v1")
-	assert.ErrorIs(t, err, ErrClientNotFound)
-
-	// New client should exist
-	client, err = repo.GetByClientID("client-v2")
-	assert.NoError(t, err)
-	assert.Equal(t, "Client V2", client.Name)
 }
 
 // TestRepository_MultipleScopes tests client with multiple scopes
