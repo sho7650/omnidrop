@@ -28,65 +28,66 @@ func NewFilesService(cfg *config.Config) *FilesService {
 }
 
 // WriteFile writes content to a file with security validation
-func (s *FilesService) WriteFile(ctx context.Context, req FileWriteRequest) FileWriteResponse {
-	// Start timing for metrics
+func (s *FilesService) WriteFile(ctx context.Context, req FileWriteRequest) (resp FileWriteResponse) {
 	start := time.Now()
-	
+	defer func() {
+		label := "success"
+		if resp.Status == "error" {
+			label = "failure"
+		}
+		observability.FileCreationsTotal.WithLabelValues(label).Inc()
+		observability.FileCreationDuration.Observe(time.Since(start).Seconds())
+	}()
+
 	// Validate required fields
 	if req.Filename == "" {
-		observability.FileCreationsTotal.WithLabelValues("failure").Inc()
 		return FileWriteResponse{
-			Status: "error",
-			Reason: "filename is required and cannot be empty",
+			Status:    "error",
+			Reason:    "filename is required and cannot be empty",
+			ErrorKind: "validation",
 		}
 	}
 
 	// Build and validate file path
 	safePath, relativePath, err := s.validateAndBuildPath(req.Filename, req.Directory)
 	if err != nil {
-		observability.FileCreationsTotal.WithLabelValues("failure").Inc()
-		observability.FileCreationDuration.Observe(time.Since(start).Seconds())
 		return FileWriteResponse{
-			Status: "error",
-			Reason: err.Error(),
+			Status:    "error",
+			Reason:    err.Error(),
+			ErrorKind: "validation",
 		}
 	}
 
 	// Check if file already exists
 	if _, err := os.Stat(safePath); err == nil {
-		observability.FileCreationsTotal.WithLabelValues("failure").Inc()
-		observability.FileCreationDuration.Observe(time.Since(start).Seconds())
 		return FileWriteResponse{
-			Status: "error",
-			Reason: "file already exists",
+			Status:    "error",
+			Reason:    "file already exists",
+			ErrorKind: "conflict",
 		}
 	}
 
 	// Create directory if it doesn't exist
 	dir := filepath.Dir(safePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		observability.FileCreationsTotal.WithLabelValues("failure").Inc()
-		observability.FileCreationDuration.Observe(time.Since(start).Seconds())
 		return FileWriteResponse{
-			Status: "error",
-			Reason: fmt.Sprintf("failed to create directory: %v", err),
+			Status:    "error",
+			Reason:    fmt.Sprintf("failed to create directory: %v", err),
+			ErrorKind: "internal",
 		}
 	}
 
 	// Write file with appropriate permissions
 	contentBytes := []byte(req.Content)
 	if err := os.WriteFile(safePath, contentBytes, 0644); err != nil {
-		observability.FileCreationsTotal.WithLabelValues("failure").Inc()
-		observability.FileCreationDuration.Observe(time.Since(start).Seconds())
 		return FileWriteResponse{
-			Status: "error",
-			Reason: fmt.Sprintf("failed to write file: %v", err),
+			Status:    "error",
+			Reason:    fmt.Sprintf("failed to write file: %v", err),
+			ErrorKind: "internal",
 		}
 	}
 
-	// Record successful metrics
-	observability.FileCreationsTotal.WithLabelValues("success").Inc()
-	observability.FileCreationDuration.Observe(time.Since(start).Seconds())
+	// Record file size metric (success only)
 	observability.FilesSizeBytes.Observe(float64(len(contentBytes)))
 
 	return FileWriteResponse{

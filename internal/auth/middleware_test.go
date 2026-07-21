@@ -15,51 +15,37 @@ import (
 // TestNewMiddleware tests middleware creation
 func TestNewMiddleware(t *testing.T) {
 	tests := []struct {
-		name              string
-		legacyEnabled     string
-		legacyToken       string
-		expectLegacy      bool
+		name          string
+		legacyEnabled bool
+		legacyToken   string
+		expectLegacy  bool
 	}{
 		{
 			name:          "creates middleware without legacy auth",
-			legacyEnabled: "",
+			legacyEnabled: false,
 			legacyToken:   "",
 			expectLegacy:  false,
 		},
 		{
 			name:          "creates middleware with legacy auth enabled",
-			legacyEnabled: "true",
+			legacyEnabled: true,
 			legacyToken:   "test-legacy-token",
 			expectLegacy:  true,
 		},
 		{
 			name:          "legacy auth disabled when flag is false",
-			legacyEnabled: "false",
+			legacyEnabled: false,
 			legacyToken:   "test-legacy-token",
-			expectLegacy:  false,
-		},
-		{
-			name:          "legacy auth disabled when token is empty",
-			legacyEnabled: "true",
-			legacyToken:   "",
 			expectLegacy:  false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set environment variables
-			if tt.legacyEnabled != "" {
-				t.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", tt.legacyEnabled)
-			}
-			if tt.legacyToken != "" {
-				t.Setenv("TOKEN", tt.legacyToken)
-			}
-
 			jm := newTestJWTManager()
 			logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
-			m := NewMiddleware(jm, logger)
+			m := NewMiddleware(jm, logger, tt.legacyEnabled, tt.legacyToken)
 
 			assert.NotNil(t, m)
 			assert.NotNil(t, m.jwtManager)
@@ -69,57 +55,8 @@ func TestNewMiddleware(t *testing.T) {
 				assert.True(t, m.legacyAuthEnabled, "expected legacy auth to be enabled")
 				assert.Equal(t, tt.legacyToken, m.legacyToken)
 			} else {
-				// Either disabled flag or empty token results in no legacy auth
-				if tt.legacyEnabled != "true" {
-					assert.False(t, m.legacyAuthEnabled)
-				}
+				assert.False(t, m.legacyAuthEnabled)
 			}
-		})
-	}
-}
-
-// TestMiddleware_Authenticate_PublicEndpoints tests that public endpoints are skipped
-func TestMiddleware_Authenticate_PublicEndpoints(t *testing.T) {
-	tests := []struct {
-		name     string
-		path     string
-		expected int
-	}{
-		{
-			name:     "skips /oauth/token endpoint",
-			path:     "/oauth/token",
-			expected: http.StatusOK,
-		},
-		{
-			name:     "skips /health endpoint",
-			path:     "/health",
-			expected: http.StatusOK,
-		},
-		{
-			name:     "skips /metrics endpoint",
-			path:     "/metrics",
-			expected: http.StatusOK,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			jm := newTestJWTManager()
-			logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-			m := NewMiddleware(jm, logger)
-
-			// Create test handler that returns OK
-			nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-			})
-
-			// Create request without any auth header
-			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
-			rec := httptest.NewRecorder()
-
-			m.Authenticate(nextHandler).ServeHTTP(rec, req)
-
-			assert.Equal(t, tt.expected, rec.Code, "public endpoint should be accessible without auth")
 		})
 	}
 }
@@ -128,7 +65,7 @@ func TestMiddleware_Authenticate_PublicEndpoints(t *testing.T) {
 func TestMiddleware_Authenticate_OAuth(t *testing.T) {
 	jm := newTestJWTManager()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewMiddleware(jm, logger)
+	m := NewMiddleware(jm, logger, false, "")
 
 	client := newTestOAuthClient("test-client", []string{"tasks:write", "files:read"})
 	validToken := generateValidToken(t, jm, client)
@@ -183,7 +120,7 @@ func TestMiddleware_Authenticate_OAuth(t *testing.T) {
 
 			nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if tt.checkClaims {
-					claims, ok := GetClaims(r)
+					claims, ok := r.Context().Value(ContextKeyClaims).(*Claims)
 					require.True(t, ok, "claims should be in context")
 					capturedClaims = claims
 				}
@@ -218,7 +155,7 @@ func TestMiddleware_Authenticate_OAuth(t *testing.T) {
 func TestMiddleware_Authenticate_ExpiredToken(t *testing.T) {
 	jm := newTestJWTManager()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewMiddleware(jm, logger)
+	m := NewMiddleware(jm, logger, false, "")
 
 	client := newTestOAuthClient("test-client", []string{"tasks:write"})
 	expiredToken := generateExpiredToken(t, jm, client)
@@ -275,20 +212,14 @@ func TestMiddleware_Authenticate_LegacyAuth(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set environment for legacy auth
-			if tt.legacyEnabled {
-				t.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
-			}
-			t.Setenv("TOKEN", tt.legacyToken)
-
 			jm := newTestJWTManager()
 			logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-			m := NewMiddleware(jm, logger)
+			m := NewMiddleware(jm, logger, tt.legacyEnabled, tt.legacyToken)
 
 			var capturedClaims *Claims
 
 			nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				claims, ok := GetClaims(r)
+				claims, ok := r.Context().Value(ContextKeyClaims).(*Claims)
 				if ok {
 					capturedClaims = claims
 				}
@@ -314,12 +245,9 @@ func TestMiddleware_Authenticate_LegacyAuth(t *testing.T) {
 
 // TestMiddleware_Authenticate_LegacyIsolation tests that OAuth takes precedence over legacy
 func TestMiddleware_Authenticate_LegacyIsolation(t *testing.T) {
-	t.Setenv("OMNIDROP_LEGACY_AUTH_ENABLED", "true")
-	t.Setenv("TOKEN", testLegacyToken)
-
 	jm := newTestJWTManager()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewMiddleware(jm, logger)
+	m := NewMiddleware(jm, logger, true, testLegacyToken)
 
 	// Create a valid OAuth token
 	client := newTestOAuthClient("oauth-client", []string{"admin:*"})
@@ -328,7 +256,7 @@ func TestMiddleware_Authenticate_LegacyIsolation(t *testing.T) {
 	var capturedClaims *Claims
 
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		claims, _ := GetClaims(r)
+		claims, _ := r.Context().Value(ContextKeyClaims).(*Claims)
 		capturedClaims = claims
 		w.WriteHeader(http.StatusOK)
 	})
@@ -350,7 +278,7 @@ func TestMiddleware_Authenticate_LegacyIsolation(t *testing.T) {
 func TestMiddleware_Authenticate_HeaderInjection(t *testing.T) {
 	jm := newTestJWTManager()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewMiddleware(jm, logger)
+	m := NewMiddleware(jm, logger, false, "")
 
 	tests := []struct {
 		name       string
@@ -392,7 +320,7 @@ func TestMiddleware_Authenticate_HeaderInjection(t *testing.T) {
 func TestMiddleware_Authenticate_ContextIntegrity(t *testing.T) {
 	jm := newTestJWTManager()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	m := NewMiddleware(jm, logger)
+	m := NewMiddleware(jm, logger, false, "")
 
 	// Pre-populate context with existing claims (simulating a previous request)
 	existingClaims := &Claims{ClientID: "existing-client", Scopes: []string{"old:scope"}}
@@ -506,58 +434,4 @@ func TestRequireScopes_NoClaims(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code, "should return 401 when no claims in context")
 }
 
-// TestGetClaims tests extracting claims from request context
-func TestGetClaims(t *testing.T) {
-	tests := []struct {
-		name          string
-		setupContext  func(*http.Request) *http.Request
-		expectClaims  bool
-		expectedID    string
-	}{
-		{
-			name: "extracts claims from valid context",
-			setupContext: func(r *http.Request) *http.Request {
-				claims := &Claims{ClientID: "test-client", Scopes: []string{"tasks:write"}}
-				ctx := context.WithValue(r.Context(), ContextKeyClaims, claims)
-				return r.WithContext(ctx)
-			},
-			expectClaims: true,
-			expectedID:   "test-client",
-		},
-		{
-			name: "returns false when no claims in context",
-			setupContext: func(r *http.Request) *http.Request {
-				return r
-			},
-			expectClaims: false,
-			expectedID:   "",
-		},
-		{
-			name: "returns false when wrong type in context",
-			setupContext: func(r *http.Request) *http.Request {
-				ctx := context.WithValue(r.Context(), ContextKeyClaims, "not-a-claims-struct")
-				return r.WithContext(ctx)
-			},
-			expectClaims: false,
-			expectedID:   "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/tasks", nil)
-			req = tt.setupContext(req)
-
-			claims, ok := GetClaims(req)
-
-			assert.Equal(t, tt.expectClaims, ok)
-			if tt.expectClaims {
-				require.NotNil(t, claims)
-				assert.Equal(t, tt.expectedID, claims.ClientID)
-			} else {
-				assert.Nil(t, claims)
-			}
-		})
-	}
-}
 

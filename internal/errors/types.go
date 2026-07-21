@@ -20,28 +20,10 @@ type DomainError struct {
 type ErrorCode string
 
 const (
-	// Validation errors
-	ErrorCodeValidation ErrorCode = "validation_error"
-
-	// Authentication and authorization errors
-	ErrorCodeAuthentication ErrorCode = "authentication_error"
-	ErrorCodeAuthorization  ErrorCode = "authorization_error"
-
-	// Resource errors
-	ErrorCodeNotFound      ErrorCode = "not_found"
-	ErrorCodeAlreadyExists ErrorCode = "already_exists"
-	ErrorCodeConflict      ErrorCode = "conflict"
-
-	// Integration errors
-	ErrorCodeAppleScript    ErrorCode = "applescript_error"
-	ErrorCodeFileSystem     ErrorCode = "filesystem_error"
-	ErrorCodeExternalSystem ErrorCode = "external_system_error"
-
-	// System errors
+	ErrorCodeValidation       ErrorCode = "validation_error"
+	ErrorCodeAppleScript      ErrorCode = "applescript_error"
 	ErrorCodeInternal         ErrorCode = "internal_error"
 	ErrorCodeMethodNotAllowed ErrorCode = "method_not_allowed"
-	ErrorCodeTimeout          ErrorCode = "timeout_error"
-	ErrorCodeRateLimit        ErrorCode = "rate_limit_exceeded"
 )
 
 // StackFrame represents a single frame in the stack trace
@@ -72,12 +54,10 @@ func (e *DomainError) LogValue() slog.Value {
 		slog.Int("http_status", e.HTTPStatus),
 	}
 
-	// Add cause if present
 	if e.Cause != nil {
 		attrs = append(attrs, slog.String("cause", e.Cause.Error()))
 	}
 
-	// Add context fields
 	if len(e.Context) > 0 {
 		contextAttrs := make([]slog.Attr, 0, len(e.Context))
 		for k, v := range e.Context {
@@ -134,17 +114,6 @@ func (e *DomainError) WithContext(key string, value any) *DomainError {
 	return e
 }
 
-// WithContextMap adds multiple context key-value pairs
-func (e *DomainError) WithContextMap(ctx map[string]any) *DomainError {
-	if e.Context == nil {
-		e.Context = make(map[string]any)
-	}
-	for k, v := range ctx {
-		e.Context[k] = v
-	}
-	return e
-}
-
 // captureStackTrace captures the current stack trace
 func captureStackTrace(skip int) []StackFrame {
 	const maxFrames = 32
@@ -170,59 +139,7 @@ func captureStackTrace(skip int) []StackFrame {
 	return frames
 }
 
-// Common error constructors for convenience
-
-// NewValidationError creates a validation error
-func NewValidationError(message string) *DomainError {
-	return NewDomainError(ErrorCodeValidation, message, 400)
-}
-
-// NewAuthenticationError creates an authentication error
-func NewAuthenticationError(message string) *DomainError {
-	return NewDomainError(ErrorCodeAuthentication, message, 401)
-}
-
-// NewAuthorizationError creates an authorization error
-func NewAuthorizationError(message string) *DomainError {
-	return NewDomainError(ErrorCodeAuthorization, message, 403)
-}
-
-// NewNotFoundError creates a not found error
-func NewNotFoundError(resource string) *DomainError {
-	return NewDomainError(ErrorCodeNotFound, fmt.Sprintf("%s not found", resource), 404)
-}
-
-// NewAlreadyExistsError creates an already exists error
-func NewAlreadyExistsError(resource string) *DomainError {
-	return NewDomainError(ErrorCodeAlreadyExists, fmt.Sprintf("%s already exists", resource), 409)
-}
-
-// NewAppleScriptError creates an AppleScript error
-func NewAppleScriptError(message string) *DomainError {
-	return NewDomainError(ErrorCodeAppleScript, message, 500)
-}
-
-// NewFileSystemError creates a filesystem error
-func NewFileSystemError(message string) *DomainError {
-	return NewDomainError(ErrorCodeFileSystem, message, 500)
-}
-
 // NewInternalError creates an internal error
 func NewInternalError(message string) *DomainError {
 	return NewDomainError(ErrorCodeInternal, message, 500)
-}
-
-// NewMethodNotAllowedError creates a method not allowed error
-func NewMethodNotAllowedError(method string) *DomainError {
-	return NewDomainError(ErrorCodeMethodNotAllowed, fmt.Sprintf("method %s not allowed", method), 405)
-}
-
-// NewTimeoutError creates a timeout error
-func NewTimeoutError(operation string) *DomainError {
-	return NewDomainError(ErrorCodeTimeout, fmt.Sprintf("%s timed out", operation), 504)
-}
-
-// NewRateLimitError creates a rate limit error
-func NewRateLimitError(message string) *DomainError {
-	return NewDomainError(ErrorCodeRateLimit, message, 429)
 }

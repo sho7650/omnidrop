@@ -31,7 +31,7 @@ func NewTokenHandler(repository *Repository, jwtManager *JWTManager, tokenExpiry
 // HandleToken handles POST /oauth/token requests
 func (h *TokenHandler) HandleToken(w http.ResponseWriter, r *http.Request) {
 	// Limit request body size to 1MB
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	r.Body = http.MaxBytesReader(w, r.Body, MaxTokenRequestSize)
 
 	// Parse request
 	var req TokenRequest

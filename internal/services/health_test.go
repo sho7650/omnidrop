@@ -1,34 +1,12 @@
 package services
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"testing"
 
 	"omnidrop/internal/config"
 )
-
-// MockExecutorForTesting is kept for backward compatibility
-// but TestAppleScriptExecutor should be used for new tests
-type MockExecutorForTesting struct {
-	executeFunc       func(ctx context.Context, script string, args ...string) ([]byte, error)
-	executeSimpleFunc func(ctx context.Context, script string) ([]byte, error)
-}
-
-func (m *MockExecutorForTesting) Execute(ctx context.Context, script string, args ...string) ([]byte, error) {
-	if m.executeFunc != nil {
-		return m.executeFunc(ctx, script, args...)
-	}
-	return []byte("mock_success"), nil
-}
-
-func (m *MockExecutorForTesting) ExecuteSimple(ctx context.Context, script string) ([]byte, error) {
-	if m.executeSimpleFunc != nil {
-		return m.executeSimpleFunc(ctx, script)
-	}
-	return []byte("mock_processes"), nil
-}
 
 func TestNewHealthService(t *testing.T) {
 	cfg := &config.Config{
@@ -51,54 +29,10 @@ func TestNewHealthServiceWithExecutor(t *testing.T) {
 		Port:  "8788",
 	}
 
-	mockExecutor := &MockExecutorForTesting{}
-	service := NewHealthServiceWithExecutor(cfg, mockExecutor)
+	service := NewHealthServiceWithExecutor(cfg, NewTestExecutor())
 
 	if service == nil {
 		t.Error("NewHealthServiceWithExecutor returned nil")
-	}
-
-	// Verify it implements the interface
-	var _ = service
-}
-
-func TestHealthServiceImpl_CheckAppleScriptHealth_Success(t *testing.T) {
-	// Create a temporary test script
-	testScript := "./temp_test_script.applescript"
-	err := createTempTestScript(testScript)
-	if err != nil {
-		t.Fatalf("Failed to create temp test script: %v", err)
-	}
-	defer removeTempTestScript(testScript)
-
-	cfg := &config.Config{
-		Token:           "test-token",
-		Port:            "8788",
-		Environment:     "test",
-		ScriptPath:      testScript,
-		AppleScriptFile: "temp_test_script.applescript",
-	}
-
-	// Create a mock executor that simulates success
-	mockExecutor := &MockExecutorForTesting{
-		executeSimpleFunc: func(ctx context.Context, script string) ([]byte, error) {
-			return []byte("System Events"), nil
-		},
-	}
-
-	service := NewHealthServiceWithExecutor(cfg, mockExecutor)
-	result := service.CheckAppleScriptHealth()
-
-	if !result.AppleScriptAccessible {
-		t.Error("Expected AppleScript to be accessible with mock executor")
-	}
-
-	if len(result.Errors) > 0 {
-		t.Errorf("Expected no errors, but got: %v", result.Errors)
-	}
-
-	if result.Details == "" {
-		t.Error("Expected details to be set")
 	}
 }
 
@@ -111,8 +45,7 @@ func TestHealthServiceImpl_CheckAppleScriptHealth_ScriptNotFound(t *testing.T) {
 		AppleScriptFile: "script.applescript",
 	}
 
-	mockExecutor := &MockExecutorForTesting{}
-	service := NewHealthServiceWithExecutor(cfg, mockExecutor)
+	service := NewHealthServiceWithExecutor(cfg, NewTestExecutor())
 	result := service.CheckAppleScriptHealth()
 
 	if result.AppleScriptAccessible {
@@ -128,58 +61,18 @@ func TestHealthServiceImpl_CheckAppleScriptHealth_ScriptNotFound(t *testing.T) {
 	}
 }
 
-func TestHealthServiceImpl_CheckAppleScriptHealth_ExecutionFailure(t *testing.T) {
-	cfg := &config.Config{
-		Token:           "test-token",
-		Port:            "8788",
-		Environment:     "test",
-		ScriptPath:      "./test_script.applescript",
-		AppleScriptFile: "test_script.applescript",
-	}
-
-	// Create a mock executor that simulates execution failure
-	mockExecutor := &MockExecutorForTesting{
-		executeSimpleFunc: func(ctx context.Context, script string) ([]byte, error) {
-			return []byte("execution error"), fmt.Errorf("mock execution failure")
-		},
-	}
-
-	service := NewHealthServiceWithExecutor(cfg, mockExecutor)
-	result := service.CheckAppleScriptHealth()
-
-	if result.AppleScriptAccessible {
-		t.Error("Expected AppleScript to be inaccessible when execution fails")
-	}
-
-	if len(result.Errors) == 0 {
-		t.Error("Expected errors when AppleScript execution fails")
-	}
-
-	if result.Details == "" {
-		t.Error("Expected details to be set when execution fails")
-	}
-}
-
-func TestHealthServiceImpl_CheckOmniFocusStatus_WithMockExecutor(t *testing.T) {
+func TestHealthServiceImpl_CheckOmniFocusStatus_WithTestExecutor(t *testing.T) {
 	cfg := &config.Config{
 		Token: "test-token",
 		Port:  "8788",
 	}
 
-	// Test with OmniFocus present
-	mockExecutor := &MockExecutorForTesting{
-		executeSimpleFunc: func(ctx context.Context, script string) ([]byte, error) {
-			return []byte("Finder, OmniFocus, Safari"), nil
-		},
-	}
-
-	service := NewHealthServiceWithExecutor(cfg, mockExecutor)
+	// NewTestExecutor's default ExecuteSimpleResponse includes "OmniFocus" in the process list.
+	service := NewHealthServiceWithExecutor(cfg, NewTestExecutor())
 	impl := service.(*HealthServiceImpl)
 
-	// Mock executor returns "OmniFocus" in process list, so status should be true
-	result := impl.CheckOmniFocusStatus()
-	if !result {
-		t.Error("Expected CheckOmniFocusStatus to return true when mock reports OmniFocus running")
+	if !impl.CheckOmniFocusStatus() {
+		t.Error("Expected CheckOmniFocusStatus to return true when executor reports OmniFocus running")
 	}
 }
 
@@ -244,7 +137,7 @@ func removeTempTestScript(path string) {
 
 // Tests using the new TestAppleScriptExecutor
 
-func TestHealthServiceImpl_CheckAppleScriptHealth_WithTestExecutor_Success(t *testing.T) {
+func TestHealthServiceImpl_CheckAppleScriptHealth_Success(t *testing.T) {
 	// Create a temporary test script
 	testScript := "./temp_test_script.applescript"
 	err := createTempTestScript(testScript)
@@ -283,7 +176,7 @@ func TestHealthServiceImpl_CheckAppleScriptHealth_WithTestExecutor_Success(t *te
 	}
 }
 
-func TestHealthServiceImpl_CheckAppleScriptHealth_WithTestExecutor_OmniFocusNotRunning(t *testing.T) {
+func TestHealthServiceImpl_CheckAppleScriptHealth_OmniFocusNotRunning(t *testing.T) {
 	// Create a temporary test script
 	testScript := "./temp_test_script.applescript"
 	err := createTempTestScript(testScript)
@@ -323,7 +216,7 @@ func TestHealthServiceImpl_CheckAppleScriptHealth_WithTestExecutor_OmniFocusNotR
 	}
 }
 
-func TestHealthServiceImpl_CheckAppleScriptHealth_WithTestExecutor_ExecutionFailure(t *testing.T) {
+func TestHealthServiceImpl_CheckAppleScriptHealth_ExecutionFailure(t *testing.T) {
 	// Create a temporary test script
 	testScript := "./temp_test_script.applescript"
 	err := createTempTestScript(testScript)

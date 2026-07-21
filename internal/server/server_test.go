@@ -15,13 +15,18 @@ import (
 )
 
 // Helper to create test server with legacy auth middleware
-func createTestServer(cfg *config.Config) *Server {
+func createTestServer(t *testing.T, cfg *config.Config) *Server {
+	t.Helper()
 	mockOmniFocusService := &mocks.MockOmniFocusService{}
 	mockFilesService := &mocks.MockFilesService{}
-	h := handlers.New(cfg, mockOmniFocusService, mockFilesService)
+	h := handlers.New("test", mockOmniFocusService, mockFilesService)
 	logger := observability.SetupLogger()
 	legacyAuth := middleware.NewLegacyAuthMiddleware(cfg.Token, logger)
-	return NewServer(cfg, h, nil, legacyAuth, nil, logger)
+	srv, err := NewServer(cfg, h, nil, legacyAuth, nil, logger)
+	if err != nil {
+		t.Fatalf("Failed to create test server: %v", err)
+	}
+	return srv
 }
 
 func TestNewServer(t *testing.T) {
@@ -30,7 +35,7 @@ func TestNewServer(t *testing.T) {
 		Token: "test-token",
 	}
 
-	server := createTestServer(cfg)
+	server := createTestServer(t, cfg)
 
 	if server == nil {
 		t.Fatal("NewServer returned nil")
@@ -49,45 +54,15 @@ func TestNewServer(t *testing.T) {
 	}
 }
 
-func TestServer_GetAddress(t *testing.T) {
-	cfg := &config.Config{
-		Port:  "8788",
-		Token: "test-token",
-	}
-
-	server := createTestServer(cfg)
-
-	expectedAddr := ":8788"
-	actualAddr := server.GetAddress()
-
-	if actualAddr != expectedAddr {
-		t.Errorf("Expected address %s, got %s", expectedAddr, actualAddr)
-	}
-}
-
-func TestServer_GetRouter(t *testing.T) {
-	cfg := &config.Config{
-		Port:  "8788",
-		Token: "test-token",
-	}
-
-	server := createTestServer(cfg)
-
-	router := server.GetRouter()
-	if router == nil {
-		t.Error("GetRouter returned nil")
-	}
-}
-
 func TestServer_RouteConfiguration(t *testing.T) {
 	cfg := &config.Config{
 		Port:  "8788",
 		Token: "test-token",
 	}
 
-	server := createTestServer(cfg)
+	server := createTestServer(t, cfg)
 
-	router := server.GetRouter()
+	router := server.router
 
 	// Test that routes are properly configured by making test requests
 	tests := []struct {
@@ -142,9 +117,9 @@ func TestServer_MiddlewareConfiguration(t *testing.T) {
 		Token: "test-token",
 	}
 
-	server := createTestServer(cfg)
+	server := createTestServer(t, cfg)
 
-	router := server.GetRouter()
+	router := server.router
 
 	// Test that middleware is working by checking headers
 	req := httptest.NewRequest("GET", "/health", nil)
@@ -171,7 +146,7 @@ func TestServer_HTTPServerConfiguration(t *testing.T) {
 		Token: "test-token",
 	}
 
-	server := createTestServer(cfg)
+	server := createTestServer(t, cfg)
 
 	// Check HTTP server configuration
 	if server.httpSrv.Addr != ":8788" {
@@ -201,7 +176,7 @@ func TestServer_Shutdown(t *testing.T) {
 		Token: "test-token",
 	}
 
-	server := createTestServer(cfg)
+	server := createTestServer(t, cfg)
 
 	// Test shutdown with context
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -220,10 +195,10 @@ func TestServer_Integration(t *testing.T) {
 		Token: "test-token",
 	}
 
-	server := createTestServer(cfg)
+	server := createTestServer(t, cfg)
 
 	// Test that the server can be used with httptest.Server
-	testServer := httptest.NewServer(server.GetRouter())
+	testServer := httptest.NewServer(server.router)
 	defer testServer.Close()
 
 	// Test health endpoint

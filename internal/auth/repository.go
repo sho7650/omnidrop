@@ -139,21 +139,6 @@ func (r *Repository) Authenticate(clientID, clientSecret string) (*OAuthClient, 
 	return client, nil
 }
 
-// List returns all active clients
-func (r *Repository) List() []*OAuthClient {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	clients := make([]*OAuthClient, 0, len(r.clients))
-	for _, client := range r.clients {
-		if !client.Disabled {
-			clients = append(clients, client)
-		}
-	}
-
-	return clients
-}
-
 // createEmptyConfig creates an empty OAuth clients configuration file
 func (r *Repository) createEmptyConfig() error {
 	// Create directory if it doesn't exist
@@ -179,14 +164,4 @@ func (r *Repository) createEmptyConfig() error {
 
 	r.lastModified = time.Now().Unix()
 	return nil
-}
-
-// Reload reloads the configuration from disk
-func (r *Repository) Reload() error {
-	// Reset last modified time to force reload
-	r.mu.Lock()
-	r.lastModified = 0
-	r.mu.Unlock()
-
-	return r.Load()
 }

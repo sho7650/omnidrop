@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -26,14 +27,6 @@ type Application struct {
 	logger           *slog.Logger
 	version          string
 	buildTime        string
-}
-
-// New creates a new application instance
-func New() *Application {
-	return &Application{
-		version:   "dev",
-		buildTime: "unknown",
-	}
 }
 
 // NewWithVersion creates a new application instance with version information
@@ -91,8 +84,8 @@ func (a *Application) initialize() error {
 			// Initialize JWT manager
 			jwtManager = auth.NewJWTManager(cfg.JWTSecret)
 
-			// Initialize OAuth middleware
-			authMiddleware = auth.NewMiddleware(jwtManager, a.logger)
+			// Initialize OAuth middleware (hybrid legacy fallback is wired from config)
+			authMiddleware = auth.NewMiddleware(jwtManager, a.logger, cfg.LegacyAuthEnabled, cfg.Token)
 
 			// Initialize token handler
 			tokenHandler = auth.NewTokenHandler(oauthRepo, jwtManager, cfg.TokenExpiry, a.logger)
@@ -122,8 +115,12 @@ func (a *Application) initialize() error {
 	filesService := services.NewFilesService(cfg)
 
 	// Initialize handlers and server
-	h := handlers.New(cfg, a.omniFocusService, filesService)
-	a.server = server.NewServer(cfg, h, authMiddleware, legacyAuthMiddleware, tokenHandler, a.logger)
+	h := handlers.New(a.version, a.omniFocusService, filesService)
+	srv, err := server.NewServer(cfg, h, authMiddleware, legacyAuthMiddleware, tokenHandler, a.logger)
+	if err != nil {
+		return fmt.Errorf("failed to create server: %w", err)
+	}
+	a.server = srv
 
 	return nil
 }
@@ -190,22 +187,3 @@ func (a *Application) shutdown() error {
 	return nil
 }
 
-// GetConfig returns the application configuration (useful for testing)
-func (a *Application) GetConfig() *config.Config {
-	return a.config
-}
-
-// GetServer returns the server instance (useful for testing)
-func (a *Application) GetServer() *server.Server {
-	return a.server
-}
-
-// GetHealthService returns the health service (useful for testing)
-func (a *Application) GetHealthService() services.HealthService {
-	return a.healthService
-}
-
-// GetOmniFocusService returns the OmniFocus service (useful for testing)
-func (a *Application) GetOmniFocusService() services.OmniFocusServiceInterface {
-	return a.omniFocusService
-}

@@ -5,7 +5,6 @@ import (
 	"crypto/subtle"
 	"log/slog"
 	"net/http"
-	"os"
 	"strings"
 
 	"omnidrop/internal/observability"
@@ -13,18 +12,16 @@ import (
 
 // Middleware provides OAuth authentication middleware
 type Middleware struct {
-	jwtManager       *JWTManager
-	logger           *slog.Logger
+	jwtManager        *JWTManager
+	logger            *slog.Logger
 	legacyAuthEnabled bool
-	legacyToken      string
+	legacyToken       string
 }
 
-// NewMiddleware creates a new OAuth middleware
-func NewMiddleware(jwtManager *JWTManager, logger *slog.Logger) *Middleware {
-	// Check for legacy auth support
-	legacyEnabled := os.Getenv("OMNIDROP_LEGACY_AUTH_ENABLED") == "true"
-	legacyToken := os.Getenv("TOKEN")
-
+// NewMiddleware creates a new OAuth middleware. Legacy hybrid mode (accept
+// both OAuth tokens and a fixed legacy bearer token) is activated only when
+// the caller passes legacyEnabled=true with a non-empty legacyToken.
+func NewMiddleware(jwtManager *JWTManager, logger *slog.Logger, legacyEnabled bool, legacyToken string) *Middleware {
 	if legacyEnabled && legacyToken != "" {
 		logger.Warn("Legacy authentication is enabled - this should only be used during migration")
 	}
@@ -37,21 +34,11 @@ func NewMiddleware(jwtManager *JWTManager, logger *slog.Logger) *Middleware {
 	}
 }
 
-// Authenticate is the main authentication middleware
+// Authenticate is the main authentication middleware. It is mounted only on
+// the protected /tasks and /files routes via chi r.Group(), so it never sees
+// /oauth/token, /health, or /metrics — no path-skip logic needed here.
 func (m *Middleware) Authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Skip OAuth endpoint itself
-		if r.URL.Path == "/oauth/token" {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		// Skip health and metrics endpoints (public)
-		if r.URL.Path == "/health" || r.URL.Path == "/metrics" {
-			next.ServeHTTP(w, r)
-			return
-		}
-
 		// Extract Authorization header
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
@@ -187,10 +174,4 @@ func (m *Middleware) respondUnauthorized(w http.ResponseWriter, message string) 
 // respondForbidden sends a forbidden response
 func respondForbidden(w http.ResponseWriter, message string) {
 	http.Error(w, message, http.StatusForbidden)
-}
-
-// GetClaims extracts OAuth claims from request context
-func GetClaims(r *http.Request) (*Claims, bool) {
-	claims, ok := r.Context().Value(ContextKeyClaims).(*Claims)
-	return claims, ok
 }

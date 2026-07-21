@@ -3,11 +3,18 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
-	"omnidrop/internal/config"
 	"omnidrop/internal/services"
+)
+
+const (
+	// MaxTaskRequestSize is the maximum allowed request body size for task creation (1MB)
+	MaxTaskRequestSize = 1 << 20
+	// MaxFileRequestSize is the maximum allowed request body size for file creation (10MB)
+	MaxFileRequestSize = 10 << 20
 )
 
 type TaskRequest struct {
@@ -24,14 +31,14 @@ type TaskResponse struct {
 }
 
 type Handlers struct {
-	cfg              *config.Config
+	version          string
 	omniFocusService services.OmniFocusServiceInterface
 	filesService     services.FilesServiceInterface
 }
 
-func New(cfg *config.Config, omniFocusService services.OmniFocusServiceInterface, filesService services.FilesServiceInterface) *Handlers {
+func New(version string, omniFocusService services.OmniFocusServiceInterface, filesService services.FilesServiceInterface) *Handlers {
 	return &Handlers{
-		cfg:              cfg,
+		version:          version,
 		omniFocusService: omniFocusService,
 		filesService:     filesService,
 	}
@@ -48,8 +55,8 @@ func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
 
 	// Authentication is handled by middleware - no need to re-authenticate here
 
-	// Limit request body size to 1MB to prevent memory exhaustion
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	// Limit request body size to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, MaxTaskRequestSize)
 
 	// Parse request body
 	var taskReq TaskRequest
@@ -86,7 +93,8 @@ func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewEncoder(w).Encode(taskResponse); err != nil {
-		writeInternalError(w, "Failed to encode response", err)
+		// Headers already sent by Encode's first Write call; cannot change response status
+		slog.Error("Failed to encode task response", slog.String("error", err.Error()))
 	}
 }
 
@@ -94,13 +102,9 @@ func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]string{
 		"status":  "ok",
-		"version": h.getVersion(),
+		"version": h.version,
 	}); err != nil {
-		writeInternalError(w, "Failed to encode health response", err)
+		// Headers already sent by Encode's first Write call; cannot change response status
+		slog.Error("Failed to encode health response", slog.String("error", err.Error()))
 	}
-}
-
-// getVersion returns the version - will be set via ldflags during build
-func (h *Handlers) getVersion() string {
-	return "dev" // This will be replaced by build-time variables
 }

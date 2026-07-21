@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"context"
 	"log/slog"
 	"net/http"
 
@@ -9,73 +8,25 @@ import (
 	sloghttp "github.com/samber/slog-http"
 )
 
-// LoggingConfig holds configuration for HTTP logging middleware
-type LoggingConfig struct {
-	Logger         *slog.Logger
-	WithRequestID  bool
-	WithBody       bool
-	WithHeaders    bool
-	SkipPaths      []string
-	ClientErrorLevel slog.Level
-	ServerErrorLevel slog.Level
-}
-
-// DefaultLoggingConfig returns sensible defaults for HTTP logging
-func DefaultLoggingConfig(logger *slog.Logger) LoggingConfig {
-	return LoggingConfig{
-		Logger:           logger,
-		WithRequestID:    true,
-		WithBody:         false, // Disable by default for security
-		WithHeaders:      false, // Disable by default for security
-		SkipPaths:        []string{"/health", "/metrics"},
+// HTTPLogging returns a middleware that logs HTTP requests using structured logging.
+// /health and /metrics are skipped to keep poller traffic out of the log.
+func HTTPLogging(logger *slog.Logger) func(http.Handler) http.Handler {
+	return sloghttp.NewWithConfig(logger, sloghttp.Config{
+		DefaultLevel:     slog.LevelInfo,
 		ClientErrorLevel: slog.LevelWarn,
 		ServerErrorLevel: slog.LevelError,
-	}
-}
-
-// HTTPLogging returns a middleware that logs HTTP requests using structured logging
-func HTTPLogging(cfg LoggingConfig) func(http.Handler) http.Handler {
-	config := sloghttp.Config{
-		DefaultLevel:     slog.LevelInfo,
-		ClientErrorLevel: cfg.ClientErrorLevel,
-		ServerErrorLevel: cfg.ServerErrorLevel,
-
-		WithRequestID:      cfg.WithRequestID,
-		WithRequestBody:    cfg.WithBody,
-		WithRequestHeader:  cfg.WithHeaders,
-		WithResponseBody:   cfg.WithBody,
-		WithResponseHeader: cfg.WithHeaders,
-
+		WithRequestID:    true,
 		Filters: []sloghttp.Filter{
-			// Skip health check and metrics endpoints
-			sloghttp.IgnorePath(cfg.SkipPaths...),
+			sloghttp.IgnorePath("/health", "/metrics"),
 		},
-	}
-
-	return sloghttp.NewWithConfig(cfg.Logger, config)
+	})
 }
 
-// contextKey is a private type for context keys defined in this package to avoid collisions.
-type contextKey string
-
-const (
-	// ContextKeyRequestID is the context key for request IDs.
-	ContextKeyRequestID contextKey = "request_id"
-)
-
-// RequestIDMiddleware adds a unique request ID to each request
+// RequestIDMiddleware adds a unique X-Request-ID response header for debugging.
 func RequestIDMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestID := generateRequestID()
-
-		// Add request ID to response header for debugging
-		w.Header().Set("X-Request-ID", requestID)
-
-		// Add request ID to request context
-		ctx := r.Context()
-		ctx = context.WithValue(ctx, ContextKeyRequestID, requestID)
-
-		next.ServeHTTP(w, r.WithContext(ctx))
+		w.Header().Set("X-Request-ID", generateRequestID())
+		next.ServeHTTP(w, r)
 	})
 }
 

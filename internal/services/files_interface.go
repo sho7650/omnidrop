@@ -16,8 +16,9 @@ type FileWriteRequest struct {
 
 // FileWriteResponse represents the response from a file write operation
 type FileWriteResponse struct {
-	Status  string // "ok" or "error"
-	Created bool   // true if file was successfully created
-	Path    string // relative path of the created file (on success)
-	Reason  string // error message (on failure)
+	Status    string // "ok" or "error"
+	Created   bool   // true if file was successfully created
+	Path      string // relative path of the created file (on success)
+	Reason    string // error message (on failure)
+	ErrorKind string // "validation", "conflict", "internal", or "" for success
 }

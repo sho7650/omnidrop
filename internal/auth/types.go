@@ -65,3 +65,8 @@ const (
 	ErrorInvalidClient        = "invalid_client"
 	ErrorUnsupportedGrantType = "unsupported_grant_type"
 )
+
+const (
+	// MaxTokenRequestSize is the maximum allowed request body size for token requests (1MB)
+	MaxTokenRequestSize = 1 << 20
+)

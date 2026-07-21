@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -136,6 +137,9 @@ func mapClaimsToClaims(mc jwt.MapClaims) (*Claims, error) {
 		for _, s := range scopesInterface {
 			if str, ok := s.(string); ok {
 				scopes = append(scopes, str)
+			} else {
+				slog.Warn("Non-string scope entry in JWT claims; skipping",
+					slog.Any("value", s))
 			}
 		}
 		claims.Scopes = scopes
